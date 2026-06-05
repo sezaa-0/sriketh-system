@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-white font-sans text-neutral-900;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply outline-none;
+  }
+}
+
+@layer components {
+  .input-field {
+    @apply w-full rounded-xl border border-neutral-200 bg-white px-4 py-3 text-[15px] text-neutral-900 placeholder:text-neutral-400 transition-all duration-200;
+    @apply focus:border-neutral-900 focus:ring-2 focus:ring-neutral-900/10 focus:shadow-none;
+  }
+
+  .input-field-orange {
+    @apply focus:border-neutral-700 focus:ring-2 focus:ring-neutral-900/10;
+  }
+
+  .trip-card-premium {
+    @apply overflow-hidden rounded-3xl border border-neutral-100 bg-white shadow-sm transition-all duration-300;
+    @apply hover:-translate-y-0.5 hover:shadow-md;
+  }
+
+  .label-field {
+    @apply mb-2.5 block;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-6 py-3.5 text-[15px] font-semibold text-white transition-all duration-200;
+    @apply hover:bg-emerald-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50;
+    @apply focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-600/20;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-2xl border border-neutral-200/90 bg-white px-6 py-3.5 text-[15px] font-medium text-neutral-800 transition-all duration-200;
+    @apply hover:border-neutral-300 hover:bg-surface-muted active:scale-[0.98];
+  }
+
+  .card-surface {
+    @apply rounded-3xl border border-neutral-100/90 bg-white shadow-card transition-shadow duration-300;
+  }
+}
