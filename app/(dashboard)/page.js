@@ -36,8 +36,13 @@ import {
   Fuel,
   Sparkles,
   TrendingUp,
+  Package,
   X,
 } from "lucide-react";
+import {
+  BuyingSellingStockModal,
+  ADD_NEW_VARIETY,
+} from "@/components/dashboard/BuyingSellingStockModal";
 
 const DB_INWARD = "බඩු ගේන්න";
 const DB_OUTWARD = "බඩු බාන්න";
@@ -1227,7 +1232,12 @@ export default function DashboardHomePage() {
     bankOutstanding: 0,
     fuelSpend: 0,
     inventoryValue: 0,
+    buyingSellingKg: 0,
   });
+  const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
+  const [buyingSellingSubmitting, setBuyingSellingSubmitting] = useState(false);
+  const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
+  const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
   const [historyLogs, setHistoryLogs] = useState({
     grossProfit: [],
     netProfit: [],
@@ -1277,6 +1287,8 @@ export default function DashboardHomePage() {
       bankDepositsRes,
       staffRes,
       staffAdvancesRes,
+      buyingSellingRes,
+      customPaddyTypesRes,
     ] = await Promise.all([
       supabase.from("trips").select("*"),
       supabase
@@ -1292,6 +1304,8 @@ export default function DashboardHomePage() {
       supabase.from("bank_deposits").select("id, amount, deposited_at, reference_note, created_at"),
       supabase.from("staff").select("id, name"),
       supabase.from("staff_advances").select("id, staff_id, amount, description, created_at"),
+      supabase.from("buying_selling_stock").select("*").order("created_at", { ascending: false }),
+      supabase.from("custom_paddy_types").select("id, name").order("name"),
     ]);
 
     const [expensesTableRes, payrollTableRes, maintenanceTableRes, dieselTableRes] =
@@ -1396,8 +1410,41 @@ export default function DashboardHomePage() {
     }
 
     const stockExpenditure = paddyValue + inventoryValue;
-    const grossProfit = trips.reduce((sum, row) => sum + tripSalesGrossMargin(row), 0);
-    const grossProfitRows = grossProfitSaleRows.sort(
+    const buyingSellingRows = buyingSellingRes.error ? [] : buyingSellingRes.data ?? [];
+    const paddyTypeNames = (customPaddyTypesRes.error ? [] : customPaddyTypesRes.data ?? []).map(
+      (r) => String(r.name ?? "").trim()
+    ).filter(Boolean);
+    setCustomPaddyTypes(paddyTypeNames);
+    setBuyingSellingRecords(buyingSellingRows);
+
+    const buyingSellingKg = buyingSellingRows
+      .filter((r) => r.is_active !== false)
+      .reduce((sum, r) => sum + toNum(r.buying_weight_kg), 0);
+
+    const bssGrossProfit = buyingSellingRows.reduce((sum, r) => sum + toNum(r.gross_profit), 0);
+    const bssGrossProfitRows = buyingSellingRows
+      .filter((r) => toNum(r.gross_profit) !== 0)
+      .map((r) => ({
+        id: `bss-gp-${r.id}`,
+        date: r.created_at,
+        productBuyer: `${String(r.commodity_type ?? "Stock")} / ${String(r.buyer_name ?? "Buyer")}`,
+        quantity: toNum(r.buying_weight_kg),
+        revenue: toNum(r.gross_profit),
+      }));
+
+    const bssExpenseRows = buyingSellingRows
+      .filter((r) => toNum(r.extra_expenses) > 0)
+      .map((r) => ({
+        id: `bss-exp-${r.id}`,
+        date: r.created_at,
+        categoryDetail: `Buying & Selling Extra - ${String(r.lorry_number || "N/A")} (${String(r.buyer_name || "Buyer")})`,
+        sourceModule: "Buying & Selling Stock",
+        amount: toNum(r.extra_expenses),
+      }));
+
+    const tripGrossProfit = trips.reduce((sum, row) => sum + tripSalesGrossMargin(row), 0);
+    const grossProfit = tripGrossProfit + bssGrossProfit;
+    const grossProfitRows = [...grossProfitSaleRows, ...bssGrossProfitRows].sort(
       (a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime()
     );
 
@@ -1579,6 +1626,7 @@ export default function DashboardHomePage() {
       ...tripDieselRows,
       ...dieselRows,
       ...tripCostRows,
+      ...bssExpenseRows,
     ]
       .filter((r) => toNum(r.amount) > 0)
       .sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime());
@@ -1724,8 +1772,61 @@ export default function DashboardHomePage() {
       bankOutstanding,
       fuelSpend,
       inventoryValue,
+      buyingSellingKg,
     });
   }, []);
+
+  const handleBuyingSellingSubmit = useCallback(
+    async (form, metrics) => {
+      setBuyingSellingSubmitting(true);
+      setError("");
+      try {
+        let paddyVariety = null;
+        if (form.commodity_type === "Paddy") {
+          if (form.paddy_variety_select === ADD_NEW_VARIETY) {
+            const newName = String(form.new_variety_name ?? "").trim();
+            if (!newName) throw new Error("Please enter a new paddy variety name.");
+            const { error: typeErr } = await supabase
+              .from("custom_paddy_types")
+              .insert({ name: newName });
+            if (typeErr && !String(typeErr.message).includes("duplicate")) throw typeErr;
+            paddyVariety = newName;
+          } else {
+            paddyVariety = String(form.paddy_variety_select || form.paddy_variety || "").trim() || null;
+          }
+        }
+
+        const payload = {
+          lorry_number: String(form.lorry_number ?? "").trim(),
+          driver_name: String(form.driver_name ?? "").trim(),
+          commodity_type: form.commodity_type,
+          paddy_variety: paddyVariety,
+          buyer_name: String(form.buyer_name ?? "").trim(),
+          buying_weight_kg: toNum(form.buying_weight_kg),
+          buying_rate_per_kg: toNum(form.buying_rate_per_kg),
+          selling_rate_per_kg: toNum(form.selling_rate_per_kg),
+          advance_cash_paid: toNum(form.advance_cash_paid),
+          extra_expenses: toNum(form.extra_expenses),
+          total_cost: metrics.totalCost,
+          total_revenue: metrics.totalRevenue,
+          gross_profit: metrics.grossProfit,
+          net_profit: metrics.netProfit,
+          advance_settlement_status: metrics.advanceSettlementStatus,
+          advance_difference: metrics.advanceDifference,
+          is_active: true,
+        };
+
+        const { error: insertErr } = await supabase.from("buying_selling_stock").insert(payload);
+        if (insertErr) throw insertErr;
+        await refresh();
+      } catch (err) {
+        setError(dbError(err));
+      } finally {
+        setBuyingSellingSubmitting(false);
+      }
+    },
+    [refresh]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1780,6 +1881,14 @@ export default function DashboardHomePage() {
           logs={historyLogs}
           onClose={() => setActiveHistoryModal(null)}
         />
+        <BuyingSellingStockModal
+          open={buyingSellingOpen}
+          onClose={() => setBuyingSellingOpen(false)}
+          records={buyingSellingRecords}
+          paddyTypes={customPaddyTypes}
+          onSubmit={handleBuyingSellingSubmit}
+          submitting={buyingSellingSubmitting}
+        />
 
         {error ? (
           <motion.div
@@ -1810,7 +1919,7 @@ export default function DashboardHomePage() {
                 onClick={() => setActiveHistoryModal("grossProfit")}
               />
               <p className="mb-5 mt-3 text-center text-[10px] font-semibold text-white/35 sm:text-left">
-                Paddy &amp; corn sales income before general expenses
+                Trip sales + buying &amp; selling stock income before general expenses
               </p>
 
               <motion.div
@@ -1863,6 +1972,14 @@ export default function DashboardHomePage() {
                   tone="amber"
                   icon={Scale}
                   onClick={() => setActiveHistoryModal("totalMaizeStock")}
+                />
+                <KpiCard
+                  title="Buying & Selling Stock"
+                  value={`${moneyPlain(kpis.buyingSellingKg)} kg`}
+                  sub="Active trade weight"
+                  tone="emerald"
+                  icon={Package}
+                  onClick={() => setBuyingSellingOpen(true)}
                 />
                 <KpiCard
                   title="Pending Receivables"
