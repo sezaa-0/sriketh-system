@@ -11,29 +11,23 @@ import {
   CalendarDays,
   Loader2,
   Pencil,
+  Plus,
   Trash2,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+import { BankLogo, BankPicker } from "@/components/ui/BankPicker";
+import { DAY_CASH_BANK_OPTIONS, findBank, normalizeBankName } from "@/lib/sri-lankan-banks";
 
 const EASE_FLOW = [0.22, 1, 0.36, 1];
 
-const GLASS_PANEL =
-  "relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl";
-
-const DEFAULT_BANKS = [
-  "BOC",
-  "Peoples Bank",
-  "Commercial Bank",
-  "Sampath Bank",
-  "HNB",
-  "Cash in Hand",
-];
-
 const INPUT =
-  "w-full rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white placeholder:text-white/35 outline-none transition focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20";
+  "w-full min-w-0 rounded-2xl border-0 bg-[#EFEFEF]/70 p-4 text-sm font-bold text-neutral-900 placeholder:text-neutral-400 outline-none transition-all duration-300 focus:bg-white focus:ring-2 focus:ring-neutral-950";
+
+const CARD =
+  "rounded-[28px] border border-neutral-100 bg-white p-6 shadow-[0_8px_30px_rgb(0,0,0,0.02)] sm:p-8";
 
 const INITIAL_FORM = {
-  bank_name: DEFAULT_BANKS[0],
+  bank_name: "",
   transaction_type: "Deposit",
   amount: "",
   description: "",
@@ -90,7 +84,7 @@ function rowDateKey(row) {
 
 function recordToForm(row) {
   return {
-    bank_name: String(row.bank_name ?? DEFAULT_BANKS[0]),
+    bank_name: normalizeBankName(row.bank_name),
     transaction_type:
       row.transaction_type === "Withdrawal" ? "Withdrawal" : "Deposit",
     amount: String(row.amount ?? ""),
@@ -105,23 +99,8 @@ function dbError(err) {
   return String(err);
 }
 
-function GlassEnergy({ colors, duration = 22 }) {
-  return (
-    <motion.div
-      aria-hidden
-      className="pointer-events-none absolute -inset-[45%] opacity-60 blur-3xl"
-      animate={{ rotate: 360 }}
-      transition={{ duration, repeat: Infinity, ease: "linear" }}
-      style={{
-        background: `conic-gradient(from 0deg, ${colors.join(", ")})`,
-      }}
-    />
-  );
-}
-
 export default function DayCashPage() {
   const [records, setRecords] = useState([]);
-  const [bankOptions, setBankOptions] = useState([...DEFAULT_BANKS]);
   const [filterDate, setFilterDate] = useState(todayDateValue);
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [editingId, setEditingId] = useState(null);
@@ -133,28 +112,9 @@ export default function DayCashPage() {
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const resetForm = () => {
-    setForm({
-      ...INITIAL_FORM,
-      bank_name: bankOptions.includes("Cash in Hand")
-        ? DEFAULT_BANKS[0]
-        : bankOptions[0] ?? DEFAULT_BANKS[0],
-    });
+    setForm({ ...INITIAL_FORM });
     setEditingId(null);
   };
-
-  const loadBankOptions = useCallback(async () => {
-    const { data, error: fetchErr } = await supabase
-      .from("bank_accounts")
-      .select("bank_name");
-    if (fetchErr && !String(fetchErr.message).includes("does not exist")) {
-      throw fetchErr;
-    }
-    const fromDb = [
-      ...new Set((data ?? []).map((r) => String(r.bank_name ?? "").trim()).filter(Boolean)),
-    ];
-    const merged = [...new Set([...DEFAULT_BANKS, ...fromDb])];
-    setBankOptions(merged);
-  }, []);
 
   const loadRecords = useCallback(async () => {
     const { data, error: fetchErr } = await supabase
@@ -170,25 +130,17 @@ export default function DayCashPage() {
     setLoading(true);
     setError("");
     try {
-      await loadBankOptions();
       await loadRecords();
     } catch (err) {
       setError(dbError(err));
     } finally {
       setLoading(false);
     }
-  }, [loadBankOptions, loadRecords]);
+  }, [loadRecords]);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
-
-  useEffect(() => {
-    setForm((prev) => {
-      if (bankOptions.includes(prev.bank_name)) return prev;
-      return { ...prev, bank_name: bankOptions[0] ?? DEFAULT_BANKS[0] };
-    });
-  }, [bankOptions]);
 
   const dayRecords = useMemo(
     () =>
@@ -223,7 +175,7 @@ export default function DayCashPage() {
     if (amount <= 0) throw new Error("Please enter a valid amount greater than zero.");
     const description = String(form.description ?? "").trim();
     if (!description) throw new Error("Please enter a description or notes.");
-    const bankName = String(form.bank_name ?? "").trim();
+    const bankName = normalizeBankName(form.bank_name);
     if (!bankName) throw new Error("Please select a bank.");
 
     return {
@@ -298,320 +250,292 @@ export default function DayCashPage() {
 
   return (
     <motion.main
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.4 }}
-      className="relative min-h-screen px-4 py-8 text-white sm:px-8 lg:px-16 lg:py-12"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, ease: EASE_FLOW }}
+      className="min-h-screen bg-white px-4 py-8 text-neutral-900 sm:px-6 lg:px-8 lg:py-10"
     >
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(34,211,238,0.12),transparent)]"
-      />
-
-      <div className="relative z-10 mx-auto max-w-[1600px]">
-        <motion.header
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease: EASE_FLOW }}
-          className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
-        >
+      <div className="mx-auto max-w-6xl">
+        <header className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
           <Link
             href="/"
-            className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-black text-white/90 transition hover:border-cyan-400/40 hover:bg-cyan-500/15 hover:text-cyan-100"
+            className="inline-flex w-fit items-center gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-2.5 text-sm font-bold text-neutral-800 transition hover:border-neutral-300 hover:bg-white"
           >
             <ArrowLeft className="h-4 w-4" strokeWidth={2.4} />
             Back to Dashboard
           </Link>
           <div className="sm:text-right">
-            <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+            <h1 className="text-3xl font-black tracking-tight text-neutral-950 sm:text-4xl">
               💰 Day Cash Book Ledger
             </h1>
-            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/45">
+            <p className="mt-2 text-sm font-semibold text-neutral-500">
               Independent daily cash flow — deposits &amp; withdrawals
             </p>
           </div>
-        </motion.header>
+        </header>
 
         {error ? (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200"
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="mb-6 flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-800"
           >
-            <AlertCircle className="h-5 w-5 shrink-0" />
-            <span>{error}</span>
-          </motion.div>
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </motion.p>
         ) : null}
 
         <div className="mb-8 grid gap-4 sm:grid-cols-2">
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.05, duration: 0.42, ease: EASE_FLOW }}
-            className={`${GLASS_PANEL} p-6 sm:p-7`}
+            transition={{ delay: 0.05, duration: 0.4, ease: EASE_FLOW }}
+            className="flex min-h-[132px] flex-col justify-center rounded-[28px] border border-emerald-200 bg-gradient-to-br from-emerald-50 via-emerald-100/80 to-emerald-200 p-6 text-emerald-950 shadow-sm"
           >
-            <GlassEnergy colors={["#10b981", "#34d399", "#6ee7b7", "#10b981"]} duration={18} />
-            <div className="relative z-10">
-              <div className="mb-3 flex items-center gap-2">
-                <ArrowDownCircle className="h-5 w-5 text-emerald-300" strokeWidth={2.2} />
-                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-200/80">
-                  Today&apos;s Total Cash In
-                </p>
-              </div>
-              <p className="font-mono text-4xl font-black text-emerald-200 sm:text-5xl">
-                {moneyFullLkr(cashInTotal)}
-              </p>
+            <div className="mb-2 flex items-center gap-2">
+              <ArrowDownCircle className="h-5 w-5 text-emerald-700" strokeWidth={2.2} />
+              <p className="text-sm font-bold text-emerald-900">Today&apos;s Total Cash In</p>
             </div>
+            <p className="font-mono text-4xl font-black tracking-tight sm:text-5xl">
+              {moneyFullLkr(cashInTotal)}
+            </p>
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 18 }}
+            initial={{ opacity: 0, y: 14 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1, duration: 0.42, ease: EASE_FLOW }}
-            className={`${GLASS_PANEL} p-6 sm:p-7`}
+            transition={{ delay: 0.1, duration: 0.4, ease: EASE_FLOW }}
+            className="flex min-h-[132px] flex-col justify-center rounded-[28px] border border-rose-200 bg-gradient-to-br from-rose-50 via-rose-100/80 to-rose-200 p-6 text-rose-950 shadow-sm"
           >
-            <GlassEnergy colors={["#fb7185", "#f43f5e", "#fda4af", "#fb7185"]} duration={20} />
-            <div className="relative z-10">
-              <div className="mb-3 flex items-center gap-2">
-                <ArrowUpCircle className="h-5 w-5 text-rose-300" strokeWidth={2.2} />
-                <p className="text-[11px] font-bold uppercase tracking-wide text-rose-200/80">
-                  Today&apos;s Total Cash Out
-                </p>
-              </div>
-              <p className="font-mono text-4xl font-black text-rose-200 sm:text-5xl">
-                {moneyFullLkr(cashOutTotal)}
-              </p>
+            <div className="mb-2 flex items-center gap-2">
+              <ArrowUpCircle className="h-5 w-5 text-rose-700" strokeWidth={2.2} />
+              <p className="text-sm font-bold text-rose-900">Today&apos;s Total Cash Out</p>
             </div>
+            <p className="font-mono text-4xl font-black tracking-tight sm:text-5xl">
+              {moneyFullLkr(cashOutTotal)}
+            </p>
           </motion.div>
         </div>
 
         {loading ? (
           <div className="flex justify-center py-20">
-            <Loader2 className="h-10 w-10 animate-spin text-white/40" />
+            <Loader2 className="h-10 w-10 animate-spin text-neutral-300" />
           </div>
         ) : (
-          <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+          <div className="grid gap-8 xl:grid-cols-[minmax(320px,400px)_1fr]">
             <motion.section
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.14, duration: 0.45, ease: EASE_FLOW }}
-              className={`${GLASS_PANEL} p-6 sm:p-8 ${isEditing ? "ring-2 ring-cyan-400/35" : ""}`}
+              transition={{ delay: 0.12, duration: 0.42, ease: EASE_FLOW }}
+              className={`h-fit ${CARD} xl:sticky xl:top-8 ${isEditing ? "ring-2 ring-neutral-950/10" : ""}`}
             >
-              <GlassEnergy colors={["#22d3ee", "#0891b2", "#67e8f9", "#22d3ee"]} duration={26} />
-              <div className="relative z-10">
-                <h2 className="mb-5 text-sm font-black uppercase tracking-wide text-white/70">
-                  {isEditing ? "Edit Transaction" : "New Cash Entry"}
-                </h2>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Bank Name
-                    </span>
-                    <select
-                      className={INPUT}
-                      value={form.bank_name}
-                      onChange={(ev) => setField("bank_name", ev.target.value)}
-                      required
-                    >
-                      {bankOptions.map((bank) => (
-                        <option key={bank} value={bank}>
-                          {bank}
-                        </option>
-                      ))}
-                    </select>
+              <h2 className="mb-5 flex items-center gap-2 text-lg font-black text-neutral-950">
+                <Plus className="h-5 w-5" />
+                {isEditing ? "Edit Transaction" : "New Cash Entry"}
+              </h2>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-neutral-500">
+                    Bank Name
                   </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Transaction Type
-                    </span>
-                    <select
-                      className={INPUT}
-                      value={form.transaction_type}
-                      onChange={(ev) => setField("transaction_type", ev.target.value)}
-                    >
-                      <option value="Deposit">Deposit</option>
-                      <option value="Withdrawal">Withdrawal</option>
-                    </select>
+                  <BankPicker
+                    value={form.bank_name}
+                    onChange={(name) => setField("bank_name", name)}
+                    banks={DAY_CASH_BANK_OPTIONS}
+                    placeholder="Select a bank"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-neutral-500">
+                    Transaction Type
                   </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Amount (Rs.)
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      className={INPUT}
-                      value={form.amount}
-                      onChange={(ev) => setField("amount", ev.target.value)}
-                      required
-                    />
+                  <select
+                    className={INPUT}
+                    value={form.transaction_type}
+                    onChange={(ev) => setField("transaction_type", ev.target.value)}
+                  >
+                    <option value="Deposit">Deposit</option>
+                    <option value="Withdrawal">Withdrawal</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-neutral-500">
+                    Amount (Rs.)
                   </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Description / Notes
-                    </span>
-                    <textarea
-                      rows={4}
-                      className={`${INPUT} resize-none`}
-                      value={form.description}
-                      onChange={(ev) => setField("description", ev.target.value)}
-                      placeholder="Enter details of why the cash came in or went out..."
-                      required
-                    />
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    className={INPUT}
+                    value={form.amount}
+                    onChange={(ev) => setField("amount", ev.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-neutral-500">
+                    Description / Notes
                   </label>
-                  <div className="flex flex-wrap items-center gap-3 pt-2">
+                  <textarea
+                    rows={4}
+                    className={`${INPUT} resize-none`}
+                    value={form.description}
+                    onChange={(ev) => setField("description", ev.target.value)}
+                    placeholder="Enter details of why the cash came in or went out..."
+                    required
+                  />
+                </div>
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  <button
+                    type="submit"
+                    disabled={actionBusy}
+                    className="inline-flex items-center justify-center gap-2 rounded-2xl bg-neutral-950 px-5 py-3.5 text-sm font-black text-white transition hover:bg-neutral-800 disabled:opacity-60"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {isEditing ? "Update" : "Save Transaction"}
+                  </button>
+                  {isEditing ? (
                     <button
-                      type="submit"
+                      type="button"
+                      onClick={resetForm}
                       disabled={actionBusy}
-                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/20 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-500/30 disabled:opacity-60"
+                      className="inline-flex items-center justify-center rounded-2xl border border-neutral-200 bg-white px-5 py-3.5 text-sm font-black text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-60"
                     >
-                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                      {isEditing ? "Update" : "Save Transaction"}
+                      Cancel
                     </button>
-                    {isEditing ? (
-                      <button
-                        type="button"
-                        onClick={resetForm}
-                        disabled={actionBusy}
-                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white/80 transition hover:bg-white/20 disabled:opacity-60"
-                      >
-                        Cancel
-                      </button>
-                    ) : null}
-                  </div>
-                </form>
-              </div>
+                  ) : null}
+                </div>
+              </form>
             </motion.section>
 
             <motion.section
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.2, duration: 0.45, ease: EASE_FLOW }}
-              className={`${GLASS_PANEL} p-6 sm:p-8`}
+              transition={{ delay: 0.18, duration: 0.42, ease: EASE_FLOW }}
+              className={CARD}
             >
-              <GlassEnergy colors={["#8b5cf6", "#6366f1", "#a78bfa", "#8b5cf6"]} duration={24} />
-              <div className="relative z-10">
-                <div className="mb-5">
-                  <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-white/70">
-                    Live Date Search
-                  </h2>
-                  <label className="block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Filter by Date
-                    </span>
-                    <div className="relative">
-                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/70" />
-                      <input
-                        type="date"
-                        className={`${INPUT} pl-10`}
-                        value={filterDate}
-                        onChange={(ev) => setFilterDate(ev.target.value)}
-                      />
-                    </div>
-                  </label>
-                </div>
+              <div className="mb-6">
+                <h2 className="mb-3 text-lg font-black text-neutral-950">Live Date Search</h2>
+                <label className="block">
+                  <span className="mb-1.5 block text-xs font-bold text-neutral-500">
+                    Filter by Date
+                  </span>
+                  <div className="relative">
+                    <CalendarDays className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+                    <input
+                      type="date"
+                      className={`${INPUT} pl-11`}
+                      value={filterDate}
+                      onChange={(ev) => setFilterDate(ev.target.value)}
+                    />
+                  </div>
+                </label>
+              </div>
 
-                <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-white/70">
-                  Transaction History Log
-                </h3>
-                <div className="overflow-hidden rounded-2xl border border-white/10">
-                  <div className="max-h-[520px] overflow-auto">
-                    <table className="w-full min-w-[720px] border-collapse text-left">
-                      <thead className="sticky top-0 bg-white/10 backdrop-blur-md">
+              <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-neutral-500">
+                Transaction History Log
+              </h3>
+              <div className="overflow-hidden rounded-2xl border border-neutral-100">
+                <div className="max-h-[560px] overflow-auto [scrollbar-width:thin]">
+                  <table className="w-full min-w-[720px] border-collapse text-left">
+                    <thead className="sticky top-0 bg-neutral-50">
+                      <tr>
+                        {["Time", "Bank", "Type", "Amount", "Description", "Actions"].map((h) => (
+                          <th
+                            key={h}
+                            className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-neutral-500"
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dayRecords.length === 0 ? (
                         <tr>
-                          {["Time", "Bank", "Type", "Amount", "Description", "Actions"].map(
-                            (h) => (
-                              <th
-                                key={h}
-                                className="px-4 py-3 text-[11px] font-black uppercase tracking-wide text-white/75"
-                              >
-                                {h}
-                              </th>
-                            )
-                          )}
+                          <td
+                            colSpan={6}
+                            className="px-4 py-12 text-center text-sm font-semibold text-neutral-400"
+                          >
+                            No day cash transactions for this date.
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {dayRecords.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={6}
-                              className="px-4 py-12 text-center text-sm font-semibold text-white/55"
+                      ) : (
+                        dayRecords.map((row) => {
+                          const isDeposit = row.transaction_type === "Deposit";
+                          const rowDeleting = deletingId === row.id;
+                          const rowEditing = editingId === row.id;
+                          const bankMeta = findBank(row.bank_name, DAY_CASH_BANK_OPTIONS);
+                          const bankLabel = normalizeBankName(row.bank_name) || row.bank_name || "—";
+                          return (
+                            <tr
+                              key={row.id}
+                              className={`border-t border-neutral-100 ${rowEditing ? "bg-sky-50/80" : "bg-white"}`}
                             >
-                              No day cash transactions for this date.
-                            </td>
-                          </tr>
-                        ) : (
-                          dayRecords.map((row) => {
-                            const isDeposit = row.transaction_type === "Deposit";
-                            const rowDeleting = deletingId === row.id;
-                            const rowEditing = editingId === row.id;
-                            return (
-                              <tr
-                                key={row.id}
-                                className={`border-t border-white/10 ${rowEditing ? "bg-cyan-500/10" : ""}`}
-                              >
-                                <td className="px-4 py-3 font-mono text-sm font-semibold text-white/85">
-                                  {formatTime(row.transaction_at || row.created_at)}
-                                </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-white/90">
-                                  {row.bank_name || "—"}
-                                </td>
-                                <td className="px-4 py-3">
-                                  <span
-                                    className={`inline-flex rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${
-                                      isDeposit
-                                        ? "border-emerald-400/35 bg-emerald-500/15 text-emerald-200"
-                                        : "border-rose-400/35 bg-rose-500/15 text-rose-200"
-                                    }`}
-                                  >
-                                    {row.transaction_type}
+                              <td className="px-4 py-3 font-mono text-sm font-semibold text-neutral-700">
+                                {formatTime(row.transaction_at || row.created_at)}
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <BankLogo bank={bankMeta} />
+                                  <span className="text-sm font-bold text-neutral-900">
+                                    {bankLabel}
                                   </span>
-                                </td>
-                                <td
-                                  className={`px-4 py-3 font-mono text-sm font-black ${
-                                    isDeposit ? "text-emerald-200" : "text-rose-200"
+                                </div>
+                              </td>
+                              <td className="px-4 py-3">
+                                <span
+                                  className={`inline-flex rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${
+                                    isDeposit
+                                      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                                      : "border-rose-200 bg-rose-50 text-rose-800"
                                   }`}
                                 >
-                                  {moneyFullLkr(row.amount)}
-                                </td>
-                                <td className="max-w-[200px] px-4 py-3 text-sm font-semibold text-white/80">
-                                  <span className="line-clamp-2">{row.description || "—"}</span>
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      type="button"
-                                      title="Edit"
-                                      onClick={() => handleEdit(row)}
-                                      disabled={actionBusy || rowDeleting}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
-                                    >
-                                      <Pencil className="h-4 w-4" strokeWidth={2.2} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title="Delete"
-                                      onClick={() => handleDelete(row)}
-                                      disabled={actionBusy || rowDeleting}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
-                                    >
-                                      {rowDeleting ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="h-4 w-4" strokeWidth={2.2} />
-                                      )}
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
+                                  {row.transaction_type}
+                                </span>
+                              </td>
+                              <td
+                                className={`px-4 py-3 font-mono text-sm font-black ${
+                                  isDeposit ? "text-emerald-700" : "text-rose-700"
+                                }`}
+                              >
+                                {moneyFullLkr(row.amount)}
+                              </td>
+                              <td className="max-w-[200px] px-4 py-3 text-sm font-semibold text-neutral-700">
+                                <span className="line-clamp-2">{row.description || "—"}</span>
+                              </td>
+                              <td className="px-4 py-3">
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    type="button"
+                                    title="Edit"
+                                    onClick={() => handleEdit(row)}
+                                    disabled={actionBusy || rowDeleting}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-neutral-200 bg-neutral-50 text-neutral-700 transition hover:bg-neutral-100 disabled:opacity-50"
+                                  >
+                                    <Pencil className="h-4 w-4" strokeWidth={2.2} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Delete"
+                                    onClick={() => handleDelete(row)}
+                                    disabled={actionBusy || rowDeleting}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-200 bg-rose-50 text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                                  >
+                                    {rowDeleting ? (
+                                      <Loader2 className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                                    )}
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </motion.section>
