@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { CheckCircle2, Loader2, Settings, X } from "lucide-react";
+import { Loader2, Settings, X } from "lucide-react";
 import { AUTH_ROLES } from "@/lib/auth/constants";
 import { getCustomUsername, setCustomUsername } from "@/lib/auth/custom-username";
 
@@ -27,24 +27,28 @@ export function AccountSettingsModal({
   onUpdated,
   variant = "dark",
 }) {
-  const [storedUsername, setStoredUsername] = useState(username);
+  const [storedUsername, setStoredUsername] = useState("");
   const [nextUsername, setNextUsername] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const isAdmin = role === AUTH_ROLES.ADMIN;
   const isDark = variant === "dark";
 
+  const readCurrentUsername = () =>
+    isAdmin ? username || "admin" : getCustomUsername();
+
   useEffect(() => {
     if (open) {
-      const current = getCustomUsername();
-      setStoredUsername(current);
+      setStoredUsername(readCurrentUsername());
       setNextUsername("");
       setNextPassword("");
       setError("");
+      setSuccess("");
     }
-  }, [open]);
+  }, [open, username, isAdmin]);
 
   const handleSubmit = async (ev) => {
     ev.preventDefault();
@@ -65,7 +69,6 @@ export function AccountSettingsModal({
     try {
       if (trimmedUsername) {
         setCustomUsername(trimmedUsername);
-        setStoredUsername(trimmedUsername);
       }
 
       const res = await fetch("/api/auth/update-profile", {
@@ -82,7 +85,8 @@ export function AccountSettingsModal({
         return;
       }
 
-      const updatedName = trimmedUsername || storedUsername || username;
+      const updatedName = readCurrentUsername();
+      setStoredUsername(updatedName);
       const parts = [];
       if (data.usernameUpdated) parts.push("username");
       if (data.passwordUpdated) parts.push("password");
@@ -94,7 +98,7 @@ export function AccountSettingsModal({
       onUpdated(updatedName, message);
       setNextUsername("");
       setNextPassword("");
-      onClose();
+      setSuccess(message);
     } catch {
       setError("Could not update account settings.");
     } finally {
@@ -178,7 +182,8 @@ export function AccountSettingsModal({
                     className={INPUT}
                     value={nextUsername}
                     onChange={(ev) => setNextUsername(ev.target.value)}
-                    placeholder={storedUsername || "New username"}
+                    placeholder={`Current: ${storedUsername}`}
+                    key={`username-placeholder-${storedUsername}`}
                   />
                 </label>
                 <label className="block">
@@ -204,6 +209,17 @@ export function AccountSettingsModal({
                     }`}
                   >
                     {error}
+                  </p>
+                ) : null}
+                {success ? (
+                  <p
+                    className={`rounded-xl border px-4 py-3 text-sm font-semibold ${
+                      isDark
+                        ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+                        : "border-emerald-200 bg-emerald-50 text-emerald-800"
+                    }`}
+                  >
+                    {success}
                   </p>
                 ) : null}
 
