@@ -945,6 +945,120 @@ function NodeAlertHub({
   );
 }
 
+function buildBssSettlementNotifications(records) {
+  const active = (records ?? []).filter((r) => r.is_active !== false);
+  const notifications = [];
+
+  for (const row of active) {
+    const advance = toNum(row.advance_cash_paid);
+    const totalCost = toNum(row.total_cost);
+    const difference = Math.abs(advance - totalCost);
+    const buyerName = String(row.buyer_name ?? "").trim() || "Unknown Buyer";
+    const lorryNumber = String(row.lorry_number ?? "").trim() || "N/A";
+
+    if (advance > totalCost + SETTLE_EPSILON) {
+      notifications.push({
+        id: row.id,
+        type: "receivable",
+        difference,
+        buyerName,
+        lorryNumber,
+      });
+    } else if (advance < totalCost - SETTLE_EPSILON) {
+      notifications.push({
+        id: row.id,
+        type: "payable",
+        difference,
+        buyerName,
+        lorryNumber,
+      });
+    }
+  }
+
+  return notifications.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "payable" ? -1 : 1;
+    return b.difference - a.difference;
+  });
+}
+
+function SettlementNotificationRow({ notification, index, onViewSettle }) {
+  const isReceivable = notification.type === "receivable";
+  const message = isReceivable
+    ? `🟢 Rs. ${moneyPlain(notification.difference)} due from Buyer ${notification.buyerName} (Lorry: ${notification.lorryNumber}) - Overpaid Advance`
+    : `🔴 Rs. ${moneyPlain(notification.difference)} outstanding payable to Buyer ${notification.buyerName} (Lorry: ${notification.lorryNumber}) - Credit Purchase`;
+
+  return (
+    <motion.li
+      initial={{ opacity: 0, x: -8 }}
+      animate={{ opacity: 1, x: 0 }}
+      transition={{ delay: index * 0.04, duration: 0.32, ease: EASE_FLOW }}
+      className={`flex flex-col gap-3 rounded-2xl border px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-3.5 ${
+        isReceivable
+          ? "border-emerald-400/25 bg-emerald-500/[0.07]"
+          : "border-rose-400/25 bg-rose-500/[0.07]"
+      }`}
+    >
+      <p className="min-w-0 flex-1 text-sm font-semibold leading-snug text-white/90">
+        {message}
+      </p>
+      <button
+        type="button"
+        onClick={() => onViewSettle(notification.id)}
+        className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-black uppercase tracking-wide text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-100"
+      >
+        View/Settle
+      </button>
+    </motion.li>
+  );
+}
+
+function SettlementNotificationCenter({ notifications, onViewSettle }) {
+  const hasItems = notifications.length > 0;
+
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.42, ease: EASE_FLOW }}
+      className={`${GLASS_PANEL} p-5 sm:p-6`}
+    >
+      <GlassEnergy
+        colors={["#10b981", "#f43f5e", "#34d399", "#fb7185"]}
+        duration={30}
+      />
+      <div className="relative z-10">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-black tracking-tight text-white sm:text-lg">
+            🔔 Live Settlement Notifications
+          </h2>
+          {hasItems ? (
+            <span className="rounded-full border border-white/15 bg-white/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white/55">
+              {notifications.length} open
+            </span>
+          ) : null}
+        </div>
+
+        {!hasItems ? (
+          <p className="text-sm font-semibold text-emerald-300/90">
+            ✅ All buying &amp; selling settlements are up to date.
+          </p>
+        ) : (
+          <ul className="space-y-2.5">
+            {notifications.map((notification, index) => (
+              <SettlementNotificationRow
+                key={notification.id}
+                notification={notification}
+                index={index}
+                onViewSettle={onViewSettle}
+              />
+            ))}
+          </ul>
+        )}
+      </div>
+    </motion.section>
+  );
+}
+
 const HISTORY_MODAL_META = {
   grossProfit: {
     title: "Gross Profit - Detailed History Log",
@@ -1235,6 +1349,7 @@ export default function DashboardHomePage() {
     buyingSellingKg: 0,
   });
   const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
+  const [buyingSellingFocusId, setBuyingSellingFocusId] = useState(null);
   const [buyingSellingSubmitting, setBuyingSellingSubmitting] = useState(false);
   const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
@@ -1907,6 +2022,26 @@ export default function DashboardHomePage() {
 
   const alertCount = vehicleAlerts.length;
 
+  const bssSettlementNotifications = useMemo(
+    () => buildBssSettlementNotifications(buyingSellingRecords),
+    [buyingSellingRecords]
+  );
+
+  const handleViewBssSettlement = useCallback((recordId) => {
+    setBuyingSellingFocusId(recordId);
+    setBuyingSellingOpen(true);
+  }, []);
+
+  const closeBuyingSellingModal = useCallback(() => {
+    setBuyingSellingOpen(false);
+    setBuyingSellingFocusId(null);
+  }, []);
+
+  const openBuyingSellingModal = useCallback(() => {
+    setBuyingSellingFocusId(null);
+    setBuyingSellingOpen(true);
+  }, []);
+
   return (
     <motion.main
       initial={{ opacity: 0 }}
@@ -1925,13 +2060,14 @@ export default function DashboardHomePage() {
         />
         <BuyingSellingStockModal
           open={buyingSellingOpen}
-          onClose={() => setBuyingSellingOpen(false)}
+          onClose={closeBuyingSellingModal}
           records={buyingSellingRecords}
           paddyTypes={customPaddyTypes}
           onSubmit={handleBuyingSellingSubmit}
           onDelete={handleBuyingSellingDelete}
           submitting={buyingSellingSubmitting}
           deletingId={buyingSellingDeletingId}
+          focusRecordId={buyingSellingFocusId}
         />
 
         {error ? (
@@ -1952,6 +2088,11 @@ export default function DashboardHomePage() {
           </div>
         ) : (
           <div className="mt-8 space-y-10">
+            <SettlementNotificationCenter
+              notifications={bssSettlementNotifications}
+              onViewSettle={handleViewBssSettlement}
+            />
+
             <motion.section
               initial="hidden"
               animate="show"
@@ -2023,7 +2164,7 @@ export default function DashboardHomePage() {
                   sub="Active trade weight"
                   tone="emerald"
                   icon={Package}
-                  onClick={() => setBuyingSellingOpen(true)}
+                  onClick={openBuyingSellingModal}
                 />
                 <KpiCard
                   title="Pending Receivables"

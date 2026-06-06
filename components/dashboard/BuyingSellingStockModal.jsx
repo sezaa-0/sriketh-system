@@ -108,16 +108,24 @@ export function BuyingSellingStockModal({
   onDelete,
   submitting,
   deletingId,
+  focusRecordId = null,
 }) {
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
-    if (open) {
-      setForm({ ...INITIAL_FORM });
-      setEditingId(null);
+    if (!open) return;
+    if (focusRecordId) {
+      const row = records.find((r) => r.id === focusRecordId);
+      if (row) {
+        setEditingId(row.id);
+        setForm(recordToForm(row));
+      }
+      return;
     }
-  }, [open]);
+    setForm({ ...INITIAL_FORM });
+    setEditingId(null);
+  }, [open, focusRecordId, records]);
 
   const metrics = useMemo(() => computeBssMetrics(form), [form]);
 
