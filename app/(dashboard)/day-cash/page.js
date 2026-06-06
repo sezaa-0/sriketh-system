@@ -1,19 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
+import { motion } from "framer-motion";
 import {
+  AlertCircle,
   ArrowDownCircle,
+  ArrowLeft,
   ArrowUpCircle,
   CalendarDays,
   Loader2,
   Pencil,
   Trash2,
-  X,
 } from "lucide-react";
 import { supabase } from "@/lib/supabase";
 
 const EASE_FLOW = [0.22, 1, 0.36, 1];
+
+const GLASS_PANEL =
+  "relative overflow-hidden rounded-3xl border border-white/10 bg-white/[0.04] shadow-[0_8px_32px_rgba(0,0,0,0.45)] backdrop-blur-xl";
 
 const DEFAULT_BANKS = [
   "BOC",
@@ -21,6 +26,7 @@ const DEFAULT_BANKS = [
   "Commercial Bank",
   "Sampath Bank",
   "HNB",
+  "Cash in Hand",
 ];
 
 const INPUT =
@@ -99,13 +105,27 @@ function dbError(err) {
   return String(err);
 }
 
-export function DayCashModal({ open, onClose }) {
+function GlassEnergy({ colors, duration = 22 }) {
+  return (
+    <motion.div
+      aria-hidden
+      className="pointer-events-none absolute -inset-[45%] opacity-60 blur-3xl"
+      animate={{ rotate: 360 }}
+      transition={{ duration, repeat: Infinity, ease: "linear" }}
+      style={{
+        background: `conic-gradient(from 0deg, ${colors.join(", ")})`,
+      }}
+    />
+  );
+}
+
+export default function DayCashPage() {
   const [records, setRecords] = useState([]);
   const [bankOptions, setBankOptions] = useState([...DEFAULT_BANKS]);
   const [filterDate, setFilterDate] = useState(todayDateValue);
   const [form, setForm] = useState({ ...INITIAL_FORM });
   const [editingId, setEditingId] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState("");
@@ -113,7 +133,12 @@ export function DayCashModal({ open, onClose }) {
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
   const resetForm = () => {
-    setForm({ ...INITIAL_FORM, bank_name: bankOptions[0] ?? DEFAULT_BANKS[0] });
+    setForm({
+      ...INITIAL_FORM,
+      bank_name: bankOptions.includes("Cash in Hand")
+        ? DEFAULT_BANKS[0]
+        : bankOptions[0] ?? DEFAULT_BANKS[0],
+    });
     setEditingId(null);
   };
 
@@ -129,7 +154,6 @@ export function DayCashModal({ open, onClose }) {
     ];
     const merged = [...new Set([...DEFAULT_BANKS, ...fromDb])];
     setBankOptions(merged);
-    return merged;
   }, []);
 
   const loadRecords = useCallback(async () => {
@@ -156,20 +180,15 @@ export function DayCashModal({ open, onClose }) {
   }, [loadBankOptions, loadRecords]);
 
   useEffect(() => {
-    if (!open) return;
-    setFilterDate(todayDateValue());
-    setEditingId(null);
-    setForm({ ...INITIAL_FORM });
     refresh();
-  }, [open, refresh]);
+  }, [refresh]);
 
   useEffect(() => {
-    if (!open) return;
     setForm((prev) => {
       if (bankOptions.includes(prev.bank_name)) return prev;
       return { ...prev, bank_name: bankOptions[0] ?? DEFAULT_BANKS[0] };
     });
-  }, [bankOptions, open]);
+  }, [bankOptions]);
 
   const dayRecords = useMemo(
     () =>
@@ -203,7 +222,7 @@ export function DayCashModal({ open, onClose }) {
     const amount = toNum(form.amount);
     if (amount <= 0) throw new Error("Please enter a valid amount greater than zero.");
     const description = String(form.description ?? "").trim();
-    if (!description) throw new Error("Please enter a description or purpose.");
+    if (!description) throw new Error("Please enter a description or notes.");
     const bankName = String(form.bank_name ?? "").trim();
     if (!bankName) throw new Error("Please select a bank.");
 
@@ -252,6 +271,7 @@ export function DayCashModal({ open, onClose }) {
   const handleEdit = (row) => {
     setEditingId(row.id);
     setForm(recordToForm(row));
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleDelete = async (row) => {
@@ -277,103 +297,112 @@ export function DayCashModal({ open, onClose }) {
   const actionBusy = submitting || Boolean(deletingId);
 
   return (
-    <AnimatePresence>
-      {open ? (
-        <motion.div
-          className="fixed inset-0 z-[90] flex items-center justify-center p-4"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
+    <motion.main
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.4 }}
+      className="relative min-h-screen px-4 py-8 text-white sm:px-8 lg:px-16 lg:py-12"
+    >
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,rgba(34,211,238,0.12),transparent)]"
+      />
+
+      <div className="relative z-10 mx-auto max-w-[1600px]">
+        <motion.header
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.45, ease: EASE_FLOW }}
+          className="mb-8 flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between"
         >
-          <motion.button
-            type="button"
-            aria-label="Close modal"
-            onClick={onClose}
-            className="absolute inset-0 bg-black/60 backdrop-blur-lg"
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.94, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.96, y: 10 }}
-            transition={{ duration: 0.24, ease: EASE_FLOW }}
-            className="relative z-10 flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-white/15 bg-[#0a0a0c]/95 shadow-[0_24px_60px_rgba(0,0,0,0.55)] backdrop-blur-2xl"
+          <Link
+            href="/"
+            className="inline-flex w-fit items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-black text-white/90 transition hover:border-cyan-400/40 hover:bg-cyan-500/15 hover:text-cyan-100"
           >
-            <div className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-6 py-5 sm:px-8">
-              <div>
-                <h3 className="text-lg font-black text-white sm:text-xl">Day Cash</h3>
-                <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/45">
-                  Daily cash deposits &amp; withdrawals by bank
+            <ArrowLeft className="h-4 w-4" strokeWidth={2.4} />
+            Back to Dashboard
+          </Link>
+          <div className="sm:text-right">
+            <h1 className="text-2xl font-black tracking-tight text-white sm:text-3xl">
+              💰 Day Cash Book Ledger
+            </h1>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/45">
+              Independent daily cash flow — deposits &amp; withdrawals
+            </p>
+          </div>
+        </motion.header>
+
+        {error ? (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 flex items-start gap-3 rounded-2xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-200"
+          >
+            <AlertCircle className="h-5 w-5 shrink-0" />
+            <span>{error}</span>
+          </motion.div>
+        ) : null}
+
+        <div className="mb-8 grid gap-4 sm:grid-cols-2">
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05, duration: 0.42, ease: EASE_FLOW }}
+            className={`${GLASS_PANEL} p-6 sm:p-7`}
+          >
+            <GlassEnergy colors={["#10b981", "#34d399", "#6ee7b7", "#10b981"]} duration={18} />
+            <div className="relative z-10">
+              <div className="mb-3 flex items-center gap-2">
+                <ArrowDownCircle className="h-5 w-5 text-emerald-300" strokeWidth={2.2} />
+                <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-200/80">
+                  Today&apos;s Total Cash In
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={onClose}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/15 bg-white/10 text-white/80 transition hover:bg-white/20"
-              >
-                <X className="h-4 w-4" />
-              </button>
+              <p className="font-mono text-4xl font-black text-emerald-200 sm:text-5xl">
+                {moneyFullLkr(cashInTotal)}
+              </p>
             </div>
+          </motion.div>
 
-            <div className="flex-1 overflow-y-auto px-6 py-5 sm:px-8">
-              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                <label className="block space-y-1.5">
-                  <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                    Filter by Date
-                  </span>
-                  <div className="relative">
-                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/70" />
-                    <input
-                      type="date"
-                      className={`${INPUT} pl-10`}
-                      value={filterDate}
-                      onChange={(ev) => setFilterDate(ev.target.value)}
-                    />
-                  </div>
-                </label>
-                {loading ? (
-                  <div className="flex items-center gap-2 text-xs font-semibold text-white/45">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Syncing records...
-                  </div>
-                ) : null}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1, duration: 0.42, ease: EASE_FLOW }}
+            className={`${GLASS_PANEL} p-6 sm:p-7`}
+          >
+            <GlassEnergy colors={["#fb7185", "#f43f5e", "#fda4af", "#fb7185"]} duration={20} />
+            <div className="relative z-10">
+              <div className="mb-3 flex items-center gap-2">
+                <ArrowUpCircle className="h-5 w-5 text-rose-300" strokeWidth={2.2} />
+                <p className="text-[11px] font-bold uppercase tracking-wide text-rose-200/80">
+                  Today&apos;s Total Cash Out
+                </p>
               </div>
+              <p className="font-mono text-4xl font-black text-rose-200 sm:text-5xl">
+                {moneyFullLkr(cashOutTotal)}
+              </p>
+            </div>
+          </motion.div>
+        </div>
 
-              <div className="mb-6 grid gap-4 sm:grid-cols-2">
-                <div className="rounded-2xl border border-emerald-400/30 bg-emerald-500/10 p-5 shadow-[0_0_24px_rgba(52,211,153,0.12)]">
-                  <div className="mb-2 flex items-center gap-2">
-                    <ArrowDownCircle className="h-5 w-5 text-emerald-300" strokeWidth={2.2} />
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-emerald-200/80">
-                      Today&apos;s Total Cash In
-                    </p>
-                  </div>
-                  <p className="font-mono text-3xl font-black text-emerald-200">
-                    {moneyFullLkr(cashInTotal)}
-                  </p>
-                </div>
-                <div className="rounded-2xl border border-rose-400/30 bg-rose-500/10 p-5 shadow-[0_0_24px_rgba(251,113,133,0.12)]">
-                  <div className="mb-2 flex items-center gap-2">
-                    <ArrowUpCircle className="h-5 w-5 text-rose-300" strokeWidth={2.2} />
-                    <p className="text-[11px] font-bold uppercase tracking-wide text-rose-200/80">
-                      Today&apos;s Total Cash Out
-                    </p>
-                  </div>
-                  <p className="font-mono text-3xl font-black text-rose-200">
-                    {moneyFullLkr(cashOutTotal)}
-                  </p>
-                </div>
-              </div>
-
-              {error ? (
-                <div className="mb-5 rounded-xl border border-rose-400/30 bg-rose-500/10 px-4 py-3 text-sm font-semibold text-rose-100">
-                  {error}
-                </div>
-              ) : null}
-
-              <form onSubmit={handleSubmit} className="space-y-5 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
-                <h4 className="text-sm font-black uppercase tracking-wide text-white/70">
-                  {isEditing ? "Edit Transaction" : "New Transaction"}
-                </h4>
-                <div className="grid gap-4 sm:grid-cols-2">
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="h-10 w-10 animate-spin text-white/40" />
+          </div>
+        ) : (
+          <div className="grid gap-8 lg:grid-cols-2 lg:items-start">
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.14, duration: 0.45, ease: EASE_FLOW }}
+              className={`${GLASS_PANEL} p-6 sm:p-8 ${isEditing ? "ring-2 ring-cyan-400/35" : ""}`}
+            >
+              <GlassEnergy colors={["#22d3ee", "#0891b2", "#67e8f9", "#22d3ee"]} duration={26} />
+              <div className="relative z-10">
+                <h2 className="mb-5 text-sm font-black uppercase tracking-wide text-white/70">
+                  {isEditing ? "Edit Transaction" : "New Cash Entry"}
+                </h2>
+                <form onSubmit={handleSubmit} className="space-y-4">
                   <label className="block space-y-1.5">
                     <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
                       Bank Name
@@ -393,7 +422,7 @@ export function DayCashModal({ open, onClose }) {
                   </label>
                   <label className="block space-y-1.5">
                     <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Type
+                      Transaction Type
                     </span>
                     <select
                       className={INPUT}
@@ -418,12 +447,12 @@ export function DayCashModal({ open, onClose }) {
                       required
                     />
                   </label>
-                  <label className="block space-y-1.5 sm:col-span-2">
+                  <label className="block space-y-1.5">
                     <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Description / Purpose
+                      Description / Notes
                     </span>
                     <textarea
-                      rows={3}
+                      rows={4}
                       className={`${INPUT} resize-none`}
                       value={form.description}
                       onChange={(ev) => setField("description", ev.target.value)}
@@ -431,37 +460,65 @@ export function DayCashModal({ open, onClose }) {
                       required
                     />
                   </label>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    type="submit"
-                    disabled={actionBusy}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/20 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-500/30 disabled:opacity-60"
-                  >
-                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                    {isEditing ? "Update Transaction" : "Save Transaction"}
-                  </button>
-                  {isEditing ? (
+                  <div className="flex flex-wrap items-center gap-3 pt-2">
                     <button
-                      type="button"
-                      onClick={resetForm}
+                      type="submit"
                       disabled={actionBusy}
-                      className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white/80 transition hover:bg-white/20 disabled:opacity-60"
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-400/40 bg-cyan-500/20 px-5 py-3 text-sm font-black text-cyan-100 transition hover:bg-cyan-500/30 disabled:opacity-60"
                     >
-                      Cancel
+                      {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      {isEditing ? "Update" : "Save Transaction"}
                     </button>
-                  ) : null}
-                </div>
-              </form>
+                    {isEditing ? (
+                      <button
+                        type="button"
+                        onClick={resetForm}
+                        disabled={actionBusy}
+                        className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white/80 transition hover:bg-white/20 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                    ) : null}
+                  </div>
+                </form>
+              </div>
+            </motion.section>
 
-              <div className="mt-8">
-                <h4 className="mb-3 text-sm font-black uppercase tracking-wide text-white/70">
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.2, duration: 0.45, ease: EASE_FLOW }}
+              className={`${GLASS_PANEL} p-6 sm:p-8`}
+            >
+              <GlassEnergy colors={["#8b5cf6", "#6366f1", "#a78bfa", "#8b5cf6"]} duration={24} />
+              <div className="relative z-10">
+                <div className="mb-5">
+                  <h2 className="mb-3 text-sm font-black uppercase tracking-wide text-white/70">
+                    Live Date Search
+                  </h2>
+                  <label className="block space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
+                      Filter by Date
+                    </span>
+                    <div className="relative">
+                      <CalendarDays className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-cyan-300/70" />
+                      <input
+                        type="date"
+                        className={`${INPUT} pl-10`}
+                        value={filterDate}
+                        onChange={(ev) => setFilterDate(ev.target.value)}
+                      />
+                    </div>
+                  </label>
+                </div>
+
+                <h3 className="mb-3 text-sm font-black uppercase tracking-wide text-white/70">
                   Transaction History Log
-                </h4>
+                </h3>
                 <div className="overflow-hidden rounded-2xl border border-white/10">
-                  <div className="max-h-[300px] overflow-auto">
-                    <table className="w-full min-w-[880px] border-collapse text-left">
-                      <thead className="sticky top-0 bg-white/10">
+                  <div className="max-h-[520px] overflow-auto">
+                    <table className="w-full min-w-[720px] border-collapse text-left">
+                      <thead className="sticky top-0 bg-white/10 backdrop-blur-md">
                         <tr>
                           {["Time", "Bank", "Type", "Amount", "Description", "Actions"].map(
                             (h) => (
@@ -480,7 +537,7 @@ export function DayCashModal({ open, onClose }) {
                           <tr>
                             <td
                               colSpan={6}
-                              className="px-4 py-10 text-center text-sm font-semibold text-white/55"
+                              className="px-4 py-12 text-center text-sm font-semibold text-white/55"
                             >
                               No day cash transactions for this date.
                             </td>
@@ -519,7 +576,7 @@ export function DayCashModal({ open, onClose }) {
                                 >
                                   {moneyFullLkr(row.amount)}
                                 </td>
-                                <td className="max-w-[220px] px-4 py-3 text-sm font-semibold text-white/80">
+                                <td className="max-w-[200px] px-4 py-3 text-sm font-semibold text-white/80">
                                   <span className="line-clamp-2">{row.description || "—"}</span>
                                 </td>
                                 <td className="px-4 py-3">
@@ -557,10 +614,10 @@ export function DayCashModal({ open, onClose }) {
                   </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        </motion.div>
-      ) : null}
-    </AnimatePresence>
+            </motion.section>
+          </div>
+        )}
+      </div>
+    </motion.main>
   );
 }

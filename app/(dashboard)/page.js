@@ -44,7 +44,6 @@ import {
   BuyingSellingStockModal,
   ADD_NEW_VARIETY,
 } from "@/components/dashboard/BuyingSellingStockModal";
-import { DayCashModal } from "@/components/dashboard/DayCashModal";
 
 const DB_INWARD = "බඩු ගේන්න";
 const DB_OUTWARD = "බඩු බාන්න";
@@ -1337,7 +1336,7 @@ const DAY_CASH_THEME = {
   border: "border-cyan-400/30",
 };
 
-function DayCashModuleCard({ onOpen }) {
+function DayCashModuleCard() {
   const cardRef = useRef(null);
   const [hovered, setHovered] = useState(false);
   const pointerX = useMotionValue(0);
@@ -1372,7 +1371,7 @@ function DayCashModuleCard({ onOpen }) {
       className="relative pt-12 sm:pt-14"
       style={{ perspective: 1100 }}
     >
-      <button type="button" onClick={onOpen} className="group block w-full text-left">
+      <Link href="/day-cash" className="group block w-full text-left">
         <motion.div
           ref={cardRef}
           onMouseMove={handlePointerMove}
@@ -1421,7 +1420,7 @@ function DayCashModuleCard({ onOpen }) {
             </p>
           </div>
         </motion.div>
-      </button>
+      </Link>
     </motion.div>
   );
 }
@@ -1451,7 +1450,6 @@ export default function DashboardHomePage() {
   const [buyingSellingSettling, setBuyingSellingSettling] = useState(false);
   const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
-  const [dayCashOpen, setDayCashOpen] = useState(false);
   const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
   const [historyLogs, setHistoryLogs] = useState({
     grossProfit: [],
@@ -2202,7 +2200,6 @@ export default function DashboardHomePage() {
           deletingId={buyingSellingDeletingId}
           focusRecordId={buyingSellingFocusId}
         />
-        <DayCashModal open={dayCashOpen} onClose={() => setDayCashOpen(false)} />
 
         {error ? (
           <motion.div
@@ -2352,7 +2349,7 @@ export default function DashboardHomePage() {
                 {MODULES.map((mod) => (
                   <ModuleCard key={mod.href} mod={mod} />
                 ))}
-                <DayCashModuleCard onOpen={() => setDayCashOpen(true)} />
+                <DayCashModuleCard />
               </motion.div>
             </section>
           </div>
