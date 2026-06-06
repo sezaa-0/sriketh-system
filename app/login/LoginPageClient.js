@@ -6,7 +6,6 @@ import { Loader2, Lock, User } from "lucide-react";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import {
   ensureCustomUsernameDefault,
-  getCustomUsername,
   matchesCustomUsername,
 } from "@/lib/auth/custom-username";
 
@@ -64,8 +63,6 @@ export default function LoginPageClient() {
     }
   };
 
-  const expectedUsername = getCustomUsername();
-
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-white px-6 py-12">
       <div className="w-full max-w-md">
@@ -91,7 +88,7 @@ export default function LoginPageClient() {
                   value={username}
                   onChange={(ev) => setUsername(ev.target.value)}
                   autoComplete="username"
-                  placeholder={expectedUsername}
+                  placeholder="Enter your username"
                   required
                 />
               </div>
