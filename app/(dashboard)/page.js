@@ -1236,6 +1236,7 @@ export default function DashboardHomePage() {
   });
   const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
   const [buyingSellingSubmitting, setBuyingSellingSubmitting] = useState(false);
+  const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
   const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
   const [historyLogs, setHistoryLogs] = useState({
@@ -1776,53 +1777,94 @@ export default function DashboardHomePage() {
     });
   }, []);
 
+  const buildBuyingSellingPayload = useCallback((form, metrics) => {
+    let paddyVariety = null;
+    if (form.commodity_type === "Paddy") {
+      if (form.paddy_variety_select === ADD_NEW_VARIETY) {
+        const newName = String(form.new_variety_name ?? "").trim();
+        if (!newName) throw new Error("Please enter a new paddy variety name.");
+        paddyVariety = newName;
+      } else {
+        paddyVariety =
+          String(form.paddy_variety_select || form.paddy_variety || "").trim() || null;
+      }
+    }
+
+    return {
+      lorry_number: String(form.lorry_number ?? "").trim(),
+      driver_name: String(form.driver_name ?? "").trim(),
+      commodity_type: form.commodity_type,
+      paddy_variety: paddyVariety,
+      buyer_name: String(form.buyer_name ?? "").trim(),
+      buying_weight_kg: toNum(form.buying_weight_kg),
+      buying_rate_per_kg: toNum(form.buying_rate_per_kg),
+      selling_rate_per_kg: toNum(form.selling_rate_per_kg),
+      advance_cash_paid: toNum(form.advance_cash_paid),
+      extra_expenses: toNum(form.extra_expenses),
+      total_cost: metrics.totalCost,
+      total_revenue: metrics.totalRevenue,
+      gross_profit: metrics.grossProfit,
+      net_profit: metrics.netProfit,
+      advance_settlement_status: metrics.advanceSettlementStatus,
+      advance_difference: metrics.advanceDifference,
+      is_active: true,
+    };
+  }, []);
+
   const handleBuyingSellingSubmit = useCallback(
-    async (form, metrics) => {
+    async (form, metrics, editingId) => {
       setBuyingSellingSubmitting(true);
       setError("");
       try {
-        let paddyVariety = null;
-        if (form.commodity_type === "Paddy") {
-          if (form.paddy_variety_select === ADD_NEW_VARIETY) {
-            const newName = String(form.new_variety_name ?? "").trim();
-            if (!newName) throw new Error("Please enter a new paddy variety name.");
-            const { error: typeErr } = await supabase
-              .from("custom_paddy_types")
-              .insert({ name: newName });
-            if (typeErr && !String(typeErr.message).includes("duplicate")) throw typeErr;
-            paddyVariety = newName;
-          } else {
-            paddyVariety = String(form.paddy_variety_select || form.paddy_variety || "").trim() || null;
-          }
+        const payload = buildBuyingSellingPayload(form, metrics);
+
+        if (form.commodity_type === "Paddy" && form.paddy_variety_select === ADD_NEW_VARIETY) {
+          const { error: typeErr } = await supabase
+            .from("custom_paddy_types")
+            .insert({ name: payload.paddy_variety });
+          if (typeErr && !String(typeErr.message).includes("duplicate")) throw typeErr;
         }
 
-        const payload = {
-          lorry_number: String(form.lorry_number ?? "").trim(),
-          driver_name: String(form.driver_name ?? "").trim(),
-          commodity_type: form.commodity_type,
-          paddy_variety: paddyVariety,
-          buyer_name: String(form.buyer_name ?? "").trim(),
-          buying_weight_kg: toNum(form.buying_weight_kg),
-          buying_rate_per_kg: toNum(form.buying_rate_per_kg),
-          selling_rate_per_kg: toNum(form.selling_rate_per_kg),
-          advance_cash_paid: toNum(form.advance_cash_paid),
-          extra_expenses: toNum(form.extra_expenses),
-          total_cost: metrics.totalCost,
-          total_revenue: metrics.totalRevenue,
-          gross_profit: metrics.grossProfit,
-          net_profit: metrics.netProfit,
-          advance_settlement_status: metrics.advanceSettlementStatus,
-          advance_difference: metrics.advanceDifference,
-          is_active: true,
-        };
+        if (editingId) {
+          const { error: updateErr } = await supabase
+            .from("buying_selling_stock")
+            .update(payload)
+            .eq("id", editingId);
+          if (updateErr) throw updateErr;
+        } else {
+          const { error: insertErr } = await supabase.from("buying_selling_stock").insert(payload);
+          if (insertErr) throw insertErr;
+        }
 
-        const { error: insertErr } = await supabase.from("buying_selling_stock").insert(payload);
-        if (insertErr) throw insertErr;
         await refresh();
+        return true;
       } catch (err) {
         setError(dbError(err));
+        return false;
       } finally {
         setBuyingSellingSubmitting(false);
+      }
+    },
+    [buildBuyingSellingPayload, refresh]
+  );
+
+  const handleBuyingSellingDelete = useCallback(
+    async (recordId) => {
+      setBuyingSellingDeletingId(recordId);
+      setError("");
+      try {
+        const { error: deleteErr } = await supabase
+          .from("buying_selling_stock")
+          .delete()
+          .eq("id", recordId);
+        if (deleteErr) throw deleteErr;
+        await refresh();
+        return true;
+      } catch (err) {
+        setError(dbError(err));
+        return false;
+      } finally {
+        setBuyingSellingDeletingId(null);
       }
     },
     [refresh]
@@ -1887,7 +1929,9 @@ export default function DashboardHomePage() {
           records={buyingSellingRecords}
           paddyTypes={customPaddyTypes}
           onSubmit={handleBuyingSellingSubmit}
+          onDelete={handleBuyingSellingDelete}
           submitting={buyingSellingSubmitting}
+          deletingId={buyingSellingDeletingId}
         />
 
         {error ? (

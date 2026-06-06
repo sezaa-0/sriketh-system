@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, X } from "lucide-react";
+import { Loader2, Pencil, Trash2, X } from "lucide-react";
 
 const EASE_FLOW = [0.22, 1, 0.36, 1];
 const ADD_NEW_VARIETY = "__add_new__";
@@ -81,31 +81,73 @@ const INITIAL_FORM = {
   extra_expenses: "",
 };
 
+function recordToForm(row) {
+  const variety = String(row.paddy_variety ?? "").trim();
+  return {
+    lorry_number: String(row.lorry_number ?? ""),
+    driver_name: String(row.driver_name ?? ""),
+    commodity_type: row.commodity_type === "Maize" ? "Maize" : "Paddy",
+    paddy_variety: variety,
+    paddy_variety_select: variety,
+    new_variety_name: "",
+    buyer_name: String(row.buyer_name ?? ""),
+    buying_weight_kg: String(row.buying_weight_kg ?? ""),
+    buying_rate_per_kg: String(row.buying_rate_per_kg ?? ""),
+    selling_rate_per_kg: String(row.selling_rate_per_kg ?? ""),
+    advance_cash_paid: String(row.advance_cash_paid ?? ""),
+    extra_expenses: String(row.extra_expenses ?? ""),
+  };
+}
+
 export function BuyingSellingStockModal({
   open,
   onClose,
   records,
   paddyTypes,
   onSubmit,
+  onDelete,
   submitting,
+  deletingId,
 }) {
   const [form, setForm] = useState({ ...INITIAL_FORM });
+  const [editingId, setEditingId] = useState(null);
 
   useEffect(() => {
-    if (open) setForm({ ...INITIAL_FORM });
+    if (open) {
+      setForm({ ...INITIAL_FORM });
+      setEditingId(null);
+    }
   }, [open]);
 
   const metrics = useMemo(() => computeBssMetrics(form), [form]);
 
   const setField = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const resetForm = () => {
+    setForm({ ...INITIAL_FORM });
+    setEditingId(null);
+  };
+
   const handleSubmit = async (ev) => {
     ev.preventDefault();
-    await onSubmit(form, metrics);
+    const ok = await onSubmit(form, metrics, editingId);
+    if (ok) resetForm();
+  };
+
+  const handleEdit = (row) => {
+    setEditingId(row.id);
+    setForm(recordToForm(row));
+  };
+
+  const handleDelete = async (row) => {
+    if (!window.confirm("Are you sure you want to delete this record?")) return;
+    const ok = await onDelete(row.id);
+    if (ok && editingId === row.id) resetForm();
   };
 
   const showPaddyVariety = form.commodity_type === "Paddy";
   const showNewVarietyInput = form.paddy_variety_select === ADD_NEW_VARIETY;
+  const isEditing = Boolean(editingId);
 
   return (
     <AnimatePresence>
@@ -135,7 +177,7 @@ export function BuyingSellingStockModal({
                   Buying &amp; Selling Stock
                 </h3>
                 <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-white/45">
-                  Record trade loads and track settlement
+                  {isEditing ? "Editing transaction record" : "Record trade loads and track settlement"}
                 </p>
               </div>
               <button
@@ -296,14 +338,26 @@ export function BuyingSellingStockModal({
                   </div>
                 ) : null}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-60 sm:w-auto"
-                >
-                  {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-                  Save Buying &amp; Selling Entry
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={submitting}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-60"
+                  >
+                    {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                    {isEditing ? "Update Transaction" : "Save Transaction"}
+                  </button>
+                  {isEditing ? (
+                    <button
+                      type="button"
+                      onClick={resetForm}
+                      disabled={submitting}
+                      className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white/80 transition hover:bg-white/20 disabled:opacity-60"
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
+                </div>
               </form>
 
               <div className="mt-8">
@@ -312,7 +366,7 @@ export function BuyingSellingStockModal({
                 </h4>
                 <div className="overflow-hidden rounded-2xl border border-white/10">
                   <div className="max-h-[280px] overflow-auto">
-                    <table className="w-full min-w-[880px] border-collapse text-left">
+                    <table className="w-full min-w-[980px] border-collapse text-left">
                       <thead className="sticky top-0 bg-white/10">
                         <tr>
                           {[
@@ -322,6 +376,7 @@ export function BuyingSellingStockModal({
                             "KG",
                             "Net Profit",
                             "Advance Status",
+                            "Actions",
                           ].map((h) => (
                             <th
                               key={h}
@@ -336,35 +391,68 @@ export function BuyingSellingStockModal({
                         {records.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={6}
+                              colSpan={7}
                               className="px-4 py-10 text-center text-sm font-semibold text-white/55"
                             >
                               No buying &amp; selling records yet.
                             </td>
                           </tr>
                         ) : (
-                          records.map((row) => (
-                            <tr key={row.id} className="border-t border-white/10">
-                              <td className="px-4 py-3 text-sm font-semibold text-white/90">
-                                {formatDateTime(row.created_at)}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-sm font-bold text-white">
-                                {row.lorry_number || "—"}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-semibold text-white/90">
-                                {row.buyer_name || "—"}
-                              </td>
-                              <td className="px-4 py-3 font-mono text-sm font-bold text-white">
-                                {moneyPlain(row.buying_weight_kg)} kg
-                              </td>
-                              <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-200">
-                                {moneyFullLkr(row.net_profit)}
-                              </td>
-                              <td className="px-4 py-3 text-sm font-semibold text-white/85">
-                                {advanceStatusLabel(row.advance_settlement_status)}
-                              </td>
-                            </tr>
-                          ))
+                          records.map((row) => {
+                            const rowDeleting = deletingId === row.id;
+                            const rowEditing = editingId === row.id;
+                            return (
+                              <tr
+                                key={row.id}
+                                className={`border-t border-white/10 ${rowEditing ? "bg-emerald-500/10" : ""}`}
+                              >
+                                <td className="px-4 py-3 text-sm font-semibold text-white/90">
+                                  {formatDateTime(row.created_at)}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-sm font-bold text-white">
+                                  {row.lorry_number || "—"}
+                                </td>
+                                <td className="px-4 py-3 text-sm font-semibold text-white/90">
+                                  {row.buyer_name || "—"}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-sm font-bold text-white">
+                                  {moneyPlain(row.buying_weight_kg)} kg
+                                </td>
+                                <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-200">
+                                  {moneyFullLkr(row.net_profit)}
+                                </td>
+                                <td className="px-4 py-3 text-sm font-semibold text-white/85">
+                                  {advanceStatusLabel(row.advance_settlement_status)}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      title="Edit"
+                                      onClick={() => handleEdit(row)}
+                                      disabled={submitting || rowDeleting}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
+                                    >
+                                      <Pencil className="h-4 w-4" strokeWidth={2.2} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      title="Delete"
+                                      onClick={() => handleDelete(row)}
+                                      disabled={submitting || rowDeleting}
+                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
+                                    >
+                                      {rowDeleting ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-4 w-4" strokeWidth={2.2} />
+                                      )}
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
                         )}
                       </tbody>
                     </table>
