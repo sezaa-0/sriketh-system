@@ -37,12 +37,14 @@ import {
   Sparkles,
   TrendingUp,
   Package,
+  Wallet,
   X,
 } from "lucide-react";
 import {
   BuyingSellingStockModal,
   ADD_NEW_VARIETY,
 } from "@/components/dashboard/BuyingSellingStockModal";
+import { DayCashModal } from "@/components/dashboard/DayCashModal";
 
 const DB_INWARD = "බඩු ගේන්න";
 const DB_OUTWARD = "බඩු බාන්න";
@@ -1329,6 +1331,101 @@ function ModuleCard({ mod }) {
   );
 }
 
+const DAY_CASH_THEME = {
+  primary: "#22d3ee",
+  dark: "#0891b2",
+  border: "border-cyan-400/30",
+};
+
+function DayCashModuleCard({ onOpen }) {
+  const cardRef = useRef(null);
+  const [hovered, setHovered] = useState(false);
+  const pointerX = useMotionValue(0);
+  const pointerY = useMotionValue(0);
+  const rotateX = useSpring(useTransform(pointerY, [-0.5, 0.5], [10, -10]), {
+    stiffness: 260,
+    damping: 24,
+  });
+  const rotateY = useSpring(useTransform(pointerX, [-0.5, 0.5], [-10, 10]), {
+    stiffness: 260,
+    damping: 24,
+  });
+  const glowOpacity = useSpring(hovered ? 1 : 0.55, { stiffness: 300, damping: 28 });
+
+  const handlePointerMove = (event) => {
+    const el = cardRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    pointerX.set((event.clientX - rect.left) / rect.width - 0.5);
+    pointerY.set((event.clientY - rect.top) / rect.height - 0.5);
+  };
+
+  const handlePointerLeave = () => {
+    pointerX.set(0);
+    pointerY.set(0);
+    setHovered(false);
+  };
+
+  return (
+    <motion.div
+      variants={moduleItemReveal}
+      className="relative pt-12 sm:pt-14"
+      style={{ perspective: 1100 }}
+    >
+      <button type="button" onClick={onOpen} className="group block w-full text-left">
+        <motion.div
+          ref={cardRef}
+          onMouseMove={handlePointerMove}
+          onMouseEnter={() => setHovered(true)}
+          onMouseLeave={handlePointerLeave}
+          style={{
+            rotateX,
+            rotateY,
+            transformStyle: "preserve-3d",
+          }}
+          whileHover={{ y: -4 }}
+          whileTap={{ scale: 0.96 }}
+          transition={{ type: "spring", stiffness: 420, damping: 26 }}
+          className={`relative min-h-[148px] overflow-visible rounded-3xl border bg-white/[0.05] shadow-[0_8px_32px_rgba(0,0,0,0.35)] backdrop-blur-xl transition-[border-color,box-shadow] duration-300 sm:min-h-[160px] ${DAY_CASH_THEME.border} ${
+            hovered ? "border-white/25" : "border-white/10"
+          }`}
+        >
+          <ProtrudingModuleIcon Icon={Wallet} theme={DAY_CASH_THEME} hovered={hovered} />
+
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 h-28 rounded-t-3xl"
+            style={{
+              background: `radial-gradient(ellipse 90% 120% at 50% 0%, ${DAY_CASH_THEME.primary}55, transparent 72%)`,
+              opacity: glowOpacity,
+            }}
+          />
+
+          <div
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 right-0 h-24 w-28 rounded-br-3xl opacity-50 transition-opacity duration-300 group-hover:opacity-80"
+            style={{
+              background: `radial-gradient(circle at 100% 100%, ${DAY_CASH_THEME.primary}44, transparent 68%)`,
+            }}
+          />
+
+          <div
+            className="relative z-10 flex min-h-[148px] flex-col items-center justify-end px-4 pb-5 pt-14 text-center sm:min-h-[160px] sm:pb-6 sm:pt-16"
+            style={{ transform: "translateZ(8px)" }}
+          >
+            <p className="text-sm font-black leading-snug text-white drop-shadow-[0_2px_10px_rgba(0,0,0,0.85)] sm:text-[15px]">
+              Day Cash
+            </p>
+            <p className="mt-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-white/45">
+              Daily Cash Flow
+            </p>
+          </div>
+        </motion.div>
+      </button>
+    </motion.div>
+  );
+}
+
 export default function DashboardHomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -1354,6 +1451,7 @@ export default function DashboardHomePage() {
   const [buyingSellingSettling, setBuyingSellingSettling] = useState(false);
   const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
+  const [dayCashOpen, setDayCashOpen] = useState(false);
   const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
   const [historyLogs, setHistoryLogs] = useState({
     grossProfit: [],
@@ -2104,6 +2202,7 @@ export default function DashboardHomePage() {
           deletingId={buyingSellingDeletingId}
           focusRecordId={buyingSellingFocusId}
         />
+        <DayCashModal open={dayCashOpen} onClose={() => setDayCashOpen(false)} />
 
         {error ? (
           <motion.div
@@ -2253,6 +2352,7 @@ export default function DashboardHomePage() {
                 {MODULES.map((mod) => (
                   <ModuleCard key={mod.href} mod={mod} />
                 ))}
+                <DayCashModuleCard onOpen={() => setDayCashOpen(true)} />
               </motion.div>
             </section>
           </div>
