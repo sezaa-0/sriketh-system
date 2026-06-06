@@ -31,6 +31,7 @@ create table if not exists buying_selling_stock (
   advance_settlement_status text not null default 'settled',
   advance_difference numeric not null default 0,
   is_active boolean not null default true,
+  settled_at timestamptz,
   created_at timestamptz not null default now()
 );
 

@@ -2,10 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, Pencil, Trash2, X } from "lucide-react";
+import { CheckCircle2, Loader2, Pencil, Trash2, X } from "lucide-react";
 
 const EASE_FLOW = [0.22, 1, 0.36, 1];
 const ADD_NEW_VARIETY = "__add_new__";
+const SETTLE_EPSILON = 0.5;
 
 const INPUT =
   "w-full rounded-xl border border-white/15 bg-white/10 px-4 py-2.5 text-sm font-semibold text-white placeholder:text-white/35 outline-none transition focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20";
@@ -60,10 +61,64 @@ function computeBssMetrics(form) {
   };
 }
 
-function advanceStatusLabel(status) {
-  if (status === "receivable_from_buyer") return "Balance Due From Buyer";
-  if (status === "payable_to_buyer") return "Outstanding Payable to Buyer";
-  return "Settled";
+function formatSettledOn(value) {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(d);
+}
+
+function isRecordSettled(row) {
+  const status = String(row.advance_settlement_status ?? "").toLowerCase();
+  if (status === "settled") return true;
+  const advance = toNum(row.advance_cash_paid);
+  const totalCost = toNum(row.total_cost);
+  return Math.abs(advance - totalCost) <= SETTLE_EPSILON;
+}
+
+function pendingSettlementLabel(row) {
+  const status = String(row.advance_settlement_status ?? "").toLowerCase();
+  if (status === "receivable_from_buyer") return "Pending Receivable";
+  if (status === "payable_to_buyer") return "Pending Payable";
+  const advance = toNum(row.advance_cash_paid);
+  const totalCost = toNum(row.total_cost);
+  if (advance > totalCost + SETTLE_EPSILON) return "Pending Receivable";
+  if (advance < totalCost - SETTLE_EPSILON) return "Pending Payable";
+  return "Pending Payable";
+}
+
+function SettlementStatusCell({ row }) {
+  if (isRecordSettled(row)) {
+    const settledOn = formatSettledOn(row.settled_at || row.created_at);
+    return (
+      <div className="space-y-1">
+        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-200 shadow-[0_0_16px_rgba(52,211,153,0.15)]">
+          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+          Settled
+        </span>
+        {settledOn ? (
+          <p className="text-[10px] font-semibold text-white/40">on {settledOn}</p>
+        ) : null}
+      </div>
+    );
+  }
+
+  const isReceivable = pendingSettlementLabel(row) === "Pending Receivable";
+  return (
+    <span
+      className={`inline-flex rounded-lg border px-2.5 py-1 text-[11px] font-black uppercase tracking-wide ${
+        isReceivable
+          ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-200"
+          : "border-rose-400/30 bg-rose-500/10 text-rose-200"
+      }`}
+    >
+      {pendingSettlementLabel(row)}
+    </span>
+  );
 }
 
 const INITIAL_FORM = {
@@ -106,7 +161,9 @@ export function BuyingSellingStockModal({
   paddyTypes,
   onSubmit,
   onDelete,
+  onSettle,
   submitting,
+  settling,
   deletingId,
   focusRecordId = null,
 }) {
@@ -153,9 +210,17 @@ export function BuyingSellingStockModal({
     if (ok && editingId === row.id) resetForm();
   };
 
+  const handleMarkSettled = async () => {
+    if (!editingId) return;
+    const ok = await onSettle(editingId, form, metrics);
+    if (ok) resetForm();
+  };
+
   const showPaddyVariety = form.commodity_type === "Paddy";
   const showNewVarietyInput = form.paddy_variety_select === ADD_NEW_VARIETY;
   const isEditing = Boolean(editingId);
+  const hasOutstandingBalance = metrics.advanceSettlementStatus !== "settled";
+  const actionBusy = submitting || settling;
 
   return (
     <AnimatePresence>
@@ -349,17 +414,28 @@ export function BuyingSellingStockModal({
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="submit"
-                    disabled={submitting}
+                    disabled={actionBusy}
                     className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-5 py-3 text-sm font-black text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-60"
                   >
                     {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     {isEditing ? "Update Transaction" : "Save Transaction"}
                   </button>
+                  {isEditing && hasOutstandingBalance ? (
+                    <button
+                      type="button"
+                      onClick={handleMarkSettled}
+                      disabled={actionBusy}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/50 bg-gradient-to-r from-emerald-500/35 to-emerald-400/25 px-5 py-3 text-sm font-black text-white shadow-[0_0_24px_rgba(52,211,153,0.35)] transition hover:from-emerald-500/45 hover:to-emerald-400/35 disabled:opacity-60"
+                    >
+                      {settling ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+                      ✅ Mark as Fully Settled
+                    </button>
+                  ) : null}
                   {isEditing ? (
                     <button
                       type="button"
                       onClick={resetForm}
-                      disabled={submitting}
+                      disabled={actionBusy}
                       className="inline-flex items-center justify-center rounded-xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-black text-white/80 transition hover:bg-white/20 disabled:opacity-60"
                     >
                       Cancel
@@ -383,7 +459,7 @@ export function BuyingSellingStockModal({
                             "Buyer",
                             "KG",
                             "Net Profit",
-                            "Advance Status",
+                            "Settlement Status",
                             "Actions",
                           ].map((h) => (
                             <th
@@ -429,8 +505,8 @@ export function BuyingSellingStockModal({
                                 <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-200">
                                   {moneyFullLkr(row.net_profit)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-semibold text-white/85">
-                                  {advanceStatusLabel(row.advance_settlement_status)}
+                                <td className="px-4 py-3">
+                                  <SettlementStatusCell row={row} />
                                 </td>
                                 <td className="px-4 py-3">
                                   <div className="flex items-center gap-2">
@@ -438,7 +514,7 @@ export function BuyingSellingStockModal({
                                       type="button"
                                       title="Edit"
                                       onClick={() => handleEdit(row)}
-                                      disabled={submitting || rowDeleting}
+                                      disabled={actionBusy || rowDeleting}
                                       className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
                                     >
                                       <Pencil className="h-4 w-4" strokeWidth={2.2} />
@@ -447,7 +523,7 @@ export function BuyingSellingStockModal({
                                       type="button"
                                       title="Delete"
                                       onClick={() => handleDelete(row)}
-                                      disabled={submitting || rowDeleting}
+                                      disabled={actionBusy || rowDeleting}
                                       className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
                                     >
                                       {rowDeleting ? (

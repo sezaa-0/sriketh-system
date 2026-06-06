@@ -1351,6 +1351,7 @@ export default function DashboardHomePage() {
   const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
   const [buyingSellingFocusId, setBuyingSellingFocusId] = useState(null);
   const [buyingSellingSubmitting, setBuyingSellingSubmitting] = useState(false);
+  const [buyingSellingSettling, setBuyingSellingSettling] = useState(false);
   const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
   const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
@@ -1985,6 +1986,43 @@ export default function DashboardHomePage() {
     [refresh]
   );
 
+  const closeBuyingSellingModal = useCallback(() => {
+    setBuyingSellingOpen(false);
+    setBuyingSellingFocusId(null);
+  }, []);
+
+  const handleBuyingSellingSettle = useCallback(
+    async (recordId, form, metrics) => {
+      setBuyingSellingSettling(true);
+      setError("");
+      try {
+        const payload = {
+          ...buildBuyingSellingPayload(form, metrics),
+          advance_cash_paid: metrics.totalCost,
+          advance_difference: 0,
+          advance_settlement_status: "settled",
+          settled_at: new Date().toISOString(),
+        };
+
+        const { error: updateErr } = await supabase
+          .from("buying_selling_stock")
+          .update(payload)
+          .eq("id", recordId);
+        if (updateErr) throw updateErr;
+
+        await refresh();
+        closeBuyingSellingModal();
+        return true;
+      } catch (err) {
+        setError(dbError(err));
+        return false;
+      } finally {
+        setBuyingSellingSettling(false);
+      }
+    },
+    [buildBuyingSellingPayload, refresh, closeBuyingSellingModal]
+  );
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -2032,11 +2070,6 @@ export default function DashboardHomePage() {
     setBuyingSellingOpen(true);
   }, []);
 
-  const closeBuyingSellingModal = useCallback(() => {
-    setBuyingSellingOpen(false);
-    setBuyingSellingFocusId(null);
-  }, []);
-
   const openBuyingSellingModal = useCallback(() => {
     setBuyingSellingFocusId(null);
     setBuyingSellingOpen(true);
@@ -2065,7 +2098,9 @@ export default function DashboardHomePage() {
           paddyTypes={customPaddyTypes}
           onSubmit={handleBuyingSellingSubmit}
           onDelete={handleBuyingSellingDelete}
+          onSettle={handleBuyingSellingSettle}
           submitting={buyingSellingSubmitting}
+          settling={buyingSellingSettling}
           deletingId={buyingSellingDeletingId}
           focusRecordId={buyingSellingFocusId}
         />
