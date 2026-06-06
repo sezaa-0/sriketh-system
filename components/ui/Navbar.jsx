@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { ChevronLeft } from "lucide-react";
 import { BrandLogo } from "./BrandLogo";
 import { NavbarClock } from "./NavbarClock";
+import { DashboardAuthBar } from "@/components/dashboard/DashboardAuthBar";
 
 function NavBackButton() {
   return (
@@ -48,7 +49,10 @@ export function Navbar() {
           </Link>
         </div>
 
-        <div className="flex shrink-0 items-center justify-end">
+        <div className="flex shrink-0 items-center justify-end gap-2">
+          <div className="hidden sm:block">
+            <DashboardAuthBar variant="light" />
+          </div>
           <NavbarClock />
         </div>
       </div>

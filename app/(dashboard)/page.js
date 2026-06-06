@@ -44,6 +44,7 @@ import {
   BuyingSellingStockModal,
   ADD_NEW_VARIETY,
 } from "@/components/dashboard/BuyingSellingStockModal";
+import { DashboardAuthBar } from "@/components/dashboard/DashboardAuthBar";
 
 const DB_INWARD = "බඩු ගේන්න";
 const DB_OUTWARD = "බඩු බාන්න";
@@ -2181,6 +2182,9 @@ export default function DashboardHomePage() {
       <ControlGridBackdrop />
 
       <div className="relative z-10 mx-auto max-w-[1600px]">
+        <div className="mb-5 flex justify-end">
+          <DashboardAuthBar variant="dark" />
+        </div>
         <BrandHero />
         <HistoryModal
           activeKey={activeHistoryModal}
