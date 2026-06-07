@@ -416,6 +416,27 @@ export function BuyingSellingStockModal({
                   ) : null}
                 </div>
 
+                {/* Additional expenses — affects net profit across the transaction */}
+                <div className={`${SECTION} border-white/15`}>
+                  <label className="block space-y-1.5">
+                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
+                      Additional Expenses (Rs.)
+                    </span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      className={INPUT}
+                      value={form.additional_expenses}
+                      onChange={(ev) => setField("additional_expenses", ev.target.value)}
+                      placeholder="0"
+                    />
+                  </label>
+                  <p className="mt-2 text-xs font-semibold text-white/45">
+                    Transport, handling, or other costs deducted from profit on this load.
+                  </p>
+                </div>
+
                 {/* Selling section */}
                 <div className={`${SECTION} border-emerald-400/20`}>
                   <h4 className="mb-4 text-xs font-black uppercase tracking-widest text-emerald-300/80">
@@ -491,13 +512,21 @@ export function BuyingSellingStockModal({
                       </div>
                     </fieldset>
                   </div>
-                  <div className="mt-4 grid gap-3 rounded-xl border border-emerald-400/15 bg-emerald-500/5 p-3 sm:grid-cols-2">
+                  <div className="mt-4 grid gap-3 rounded-xl border border-emerald-400/15 bg-emerald-500/5 p-3 sm:grid-cols-3">
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">
                         Total Selling Amount
                       </p>
                       <p className="font-mono text-lg font-black text-emerald-100">
                         {moneyFullLkr(metrics.totalSellingAmount)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-wide text-white/45">
+                        Additional Expenses
+                      </p>
+                      <p className="font-mono text-lg font-black text-white/80">
+                        {moneyFullLkr(metrics.additionalExpenses)}
                       </p>
                     </div>
                     <div>

@@ -12,6 +12,7 @@ alter table public.buying_selling_stock
   add column if not exists supplier_balance numeric(14, 2) default 0,
   add column if not exists selling_price_per_kg numeric(14, 2) default 0,
   add column if not exists total_selling_amount numeric(14, 2) default 0,
+  add column if not exists additional_expenses numeric(14, 2) default 0,
   add column if not exists payment_status text default 'Pending',
   add column if not exists payment_method text default 'Cash';
 
@@ -26,6 +27,7 @@ set
   amount_paid_to_supplier = case when coalesce(amount_paid_to_supplier, 0) = 0 then advance_cash_paid else amount_paid_to_supplier end,
   selling_price_per_kg = case when coalesce(selling_price_per_kg, 0) = 0 then selling_rate_per_kg else selling_price_per_kg end,
   total_selling_amount = case when coalesce(total_selling_amount, 0) = 0 then total_revenue else total_selling_amount end,
+  additional_expenses = case when coalesce(additional_expenses, 0) = 0 then coalesce(extra_expenses, 0) else additional_expenses end,
   supplier_balance = coalesce(total_buying_amount, total_cost, 0) - coalesce(amount_paid_to_supplier, advance_cash_paid, 0),
   payment_status = case
     when payment_status in ('Pending', 'Settled') then payment_status

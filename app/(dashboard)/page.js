@@ -44,6 +44,7 @@ import { BuyingSellingStockModal } from "@/components/dashboard/BuyingSellingSto
 import {
   ADD_NEW_VARIETY,
   buildBssPayload,
+  getBssAdditionalExpenses,
   getBssNetProfit,
   getBssPaymentStatus,
   getBssTotalKg,
@@ -1678,13 +1679,13 @@ export default function DashboardHomePage() {
       }));
 
     const bssExpenseRows = buyingSellingRows
-      .filter((r) => toNum(r.extra_expenses) > 0)
+      .filter((r) => getBssAdditionalExpenses(r) > 0)
       .map((r) => ({
         id: `bss-exp-${r.id}`,
         date: r.created_at,
-        categoryDetail: `Buying & Selling Extra - ${getBssVehicleNo(r)} (${String(r.buyer_name || "Buyer")})`,
+        categoryDetail: `Buying & Selling Additional Expenses - ${getBssVehicleNo(r)} (${String(r.buyer_name || "Buyer")})`,
         sourceModule: "Buying & Selling Stock",
-        amount: toNum(r.extra_expenses),
+        amount: getBssAdditionalExpenses(r),
       }));
 
     const tripGrossProfit = trips.reduce((sum, row) => sum + tripSalesGrossMargin(row), 0);

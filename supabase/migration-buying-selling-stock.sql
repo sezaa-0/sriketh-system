@@ -33,6 +33,7 @@ create table if not exists buying_selling_stock (
   selling_price_per_kg numeric not null default 0,
   selling_rate_per_kg numeric not null default 0,
   total_selling_amount numeric not null default 0,
+  additional_expenses numeric not null default 0,
   extra_expenses numeric not null default 0,
   total_cost numeric not null default 0,
   total_revenue numeric not null default 0,
