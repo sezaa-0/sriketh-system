@@ -121,6 +121,13 @@ function SettlementStatusCell({ row }) {
   );
 }
 
+const COMMODITY_TYPES = ["Paddy", "Maize", "Rice", "Black Seed"];
+
+function normalizeCommodityType(value) {
+  const trimmed = String(value ?? "").trim();
+  return COMMODITY_TYPES.includes(trimmed) ? trimmed : "Paddy";
+}
+
 const INITIAL_FORM = {
   lorry_number: "",
   driver_name: "",
@@ -141,7 +148,7 @@ function recordToForm(row) {
   return {
     lorry_number: String(row.lorry_number ?? ""),
     driver_name: String(row.driver_name ?? ""),
-    commodity_type: row.commodity_type === "Maize" ? "Maize" : "Paddy",
+    commodity_type: normalizeCommodityType(row.commodity_type),
     paddy_variety: variety,
     paddy_variety_select: variety,
     new_variety_name: "",
@@ -294,10 +301,26 @@ export function BuyingSellingStockModal({
                     <select
                       className={INPUT}
                       value={form.commodity_type}
-                      onChange={(ev) => setField("commodity_type", ev.target.value)}
+                      onChange={(ev) => {
+                        const nextType = ev.target.value;
+                        setForm((prev) => ({
+                          ...prev,
+                          commodity_type: nextType,
+                          ...(nextType !== "Paddy"
+                            ? {
+                                paddy_variety: "",
+                                paddy_variety_select: "",
+                                new_variety_name: "",
+                              }
+                            : {}),
+                        }));
+                      }}
                     >
-                      <option value="Paddy">Paddy</option>
-                      <option value="Maize">Maize</option>
+                      {COMMODITY_TYPES.map((type) => (
+                        <option key={type} value={type}>
+                          {type}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="block space-y-1.5">

@@ -16,7 +16,7 @@ create table if not exists buying_selling_stock (
   id uuid primary key default gen_random_uuid(),
   lorry_number text not null default '',
   driver_name text not null default '',
-  commodity_type text not null check (commodity_type in ('Paddy', 'Maize')),
+  commodity_type text not null check (commodity_type in ('Paddy', 'Maize', 'Rice', 'Black Seed')),
   paddy_variety text,
   buyer_name text not null default '',
   buying_weight_kg numeric not null default 0,
