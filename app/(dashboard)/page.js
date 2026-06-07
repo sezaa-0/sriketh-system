@@ -2143,7 +2143,6 @@ export default function DashboardHomePage() {
           .from("buying_selling_stock")
           .update({
             payment_status: "Settled",
-            advance_settlement_status: "settled",
             settled_at: settledAt,
           })
           .eq("id", recordId);
@@ -2155,7 +2154,6 @@ export default function DashboardHomePage() {
               ? normalizeBssRow({
                   ...row,
                   payment_status: "Settled",
-                  advance_settlement_status: "settled",
                   settled_at: settledAt,
                 })
               : row
