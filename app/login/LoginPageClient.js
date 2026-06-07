@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Lock, User } from "lucide-react";
 import { BrandLogo } from "@/components/ui/BrandLogo";
+import { ADMIN_USERNAME } from "@/lib/auth/constants";
 import {
-  ensureCustomUsernameDefault,
-  matchesCustomUsername,
+  getExpectedLoginUsername,
+  persistUsernameAfterLogin,
 } from "@/lib/auth/custom-username";
 
 const INPUT =
@@ -20,10 +21,6 @@ export default function LoginPageClient() {
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    ensureCustomUsernameDefault();
-  }, []);
-
   const handleSubmit = async (ev) => {
     ev.preventDefault();
     setSubmitting(true);
@@ -32,9 +29,12 @@ export default function LoginPageClient() {
     const trimmedUsername = username.trim();
 
     try {
-      if (trimmedUsername !== "admin" && !matchesCustomUsername(trimmedUsername)) {
-        setError("Invalid Username or Password");
-        return;
+      if (trimmedUsername !== ADMIN_USERNAME) {
+        const expectedUsername = getExpectedLoginUsername();
+        if (trimmedUsername !== expectedUsername) {
+          setError("Invalid Username or Password");
+          return;
+        }
       }
 
       const res = await fetch("/api/auth/login", {
@@ -51,6 +51,10 @@ export default function LoginPageClient() {
       if (!res.ok) {
         setError(data.error || "Invalid Username or Password");
         return;
+      }
+
+      if (trimmedUsername !== ADMIN_USERNAME) {
+        persistUsernameAfterLogin(trimmedUsername);
       }
 
       const next = searchParams.get("next") || "/";
