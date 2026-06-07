@@ -51,7 +51,9 @@ import {
   getBssSellingWeight,
   getBssTotalSellingAmount,
   getBssVehicleNo,
+  mergeBssRecord,
   normalizeBssRow,
+  normalizeBssRecords,
   resolveBssVariety,
   sumBssActiveBuyingWeight,
   sumBssOutstandingReceivables,
@@ -1651,14 +1653,21 @@ export default function DashboardHomePage() {
     }
 
     const stockExpenditure = paddyValue + inventoryValue;
-    const buyingSellingRows = (buyingSellingRes.error ? [] : buyingSellingRes.data ?? []).map(
-      normalizeBssRow
-    );
+    let buyingSellingRows = [];
+
+    setBuyingSellingRecords((prev) => {
+      if (buyingSellingRes.error) {
+        buyingSellingRows = prev;
+        return prev;
+      }
+      buyingSellingRows = normalizeBssRecords(buyingSellingRes.data ?? []);
+      return buyingSellingRows;
+    });
+
     const paddyTypeNames = (customPaddyTypesRes.error ? [] : customPaddyTypesRes.data ?? []).map(
       (r) => String(r.name ?? "").trim()
     ).filter(Boolean);
     setCustomPaddyTypes(paddyTypeNames);
-    setBuyingSellingRecords(buyingSellingRows);
 
     const buyingSellingKg = sumBssActiveBuyingWeight(
       buyingSellingRows.filter((r) => r.is_active !== false)
@@ -2040,18 +2049,39 @@ export default function DashboardHomePage() {
           if (typeErr && !String(typeErr.message).includes("duplicate")) throw typeErr;
         }
 
+        let savedRecord;
         if (editingId) {
-          const { error: updateErr } = await supabase
+          const { data, error: updateErr } = await supabase
             .from("buying_selling_stock")
             .update(payload)
-            .eq("id", editingId);
+            .eq("id", editingId)
+            .select("*")
+            .single();
           if (updateErr) throw updateErr;
+          savedRecord = data;
         } else {
-          const { error: insertErr } = await supabase.from("buying_selling_stock").insert(payload);
+          const { data, error: insertErr } = await supabase
+            .from("buying_selling_stock")
+            .insert(payload)
+            .select("*")
+            .single();
           if (insertErr) throw insertErr;
+          savedRecord = data;
         }
 
-        await refresh();
+        setBuyingSellingRecords((prev) => {
+          const next = mergeBssRecord(prev, savedRecord);
+          setKpis((kpiPrev) => ({
+            ...kpiPrev,
+            buyingSellingKg: sumBssActiveBuyingWeight(
+              next.filter((r) => r.is_active !== false)
+            ),
+            bssOutstandingReceivables: sumBssOutstandingReceivables(next),
+          }));
+          return next;
+        });
+
+        refresh().catch(() => {});
         return true;
       } catch (err) {
         setError(dbError(err));
@@ -2073,7 +2103,20 @@ export default function DashboardHomePage() {
           .delete()
           .eq("id", recordId);
         if (deleteErr) throw deleteErr;
-        await refresh();
+
+        setBuyingSellingRecords((prev) => {
+          const next = prev.filter((row) => row.id !== recordId);
+          setKpis((kpiPrev) => ({
+            ...kpiPrev,
+            buyingSellingKg: sumBssActiveBuyingWeight(
+              next.filter((r) => r.is_active !== false)
+            ),
+            bssOutstandingReceivables: sumBssOutstandingReceivables(next),
+          }));
+          return next;
+        });
+
+        refresh().catch(() => {});
         return true;
       } catch (err) {
         setError(dbError(err));
@@ -2109,12 +2152,12 @@ export default function DashboardHomePage() {
         setBuyingSellingRecords((prev) => {
           const next = prev.map((row) =>
             row.id === recordId
-              ? {
+              ? normalizeBssRow({
                   ...row,
                   payment_status: "Settled",
                   advance_settlement_status: "settled",
                   settled_at: settledAt,
-                }
+                })
               : row
           );
           setKpis((kpiPrev) => ({
@@ -2124,7 +2167,7 @@ export default function DashboardHomePage() {
           return next;
         });
 
-        await refresh();
+        refresh().catch(() => {});
         return true;
       } catch (err) {
         setError(dbError(err));

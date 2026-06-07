@@ -10,12 +10,14 @@ import {
   BSS_PAYMENT_STATUSES,
   buildBssFormFromRecord,
   computeBssMetrics,
+  formatBssWeightKg,
   getBssBuyingWeight,
+  getBssCommodityLabel,
   getBssNetProfit,
   getBssPaymentStatus,
   getBssSellingWeight,
   getBssVehicleNo,
-  normalizeBssRow,
+  normalizeBssRecords,
 } from "@/lib/buying-selling-stock";
 import { CheckCircle2, Loader2, Pencil, Trash2, X } from "lucide-react";
 
@@ -59,27 +61,70 @@ function formatSettledOn(value) {
   }).format(d);
 }
 
-function PaymentStatusCell({ row }) {
+function PaymentStatusCell({ row, isPending, rowSettling, actionBusy, rowDeleting, onSettle, onEdit, onDelete }) {
   const status = getBssPaymentStatus(row);
-  if (status === "Settled") {
-    const settledOn = formatSettledOn(row.settled_at || row.created_at);
-    return (
-      <div className="space-y-1">
-        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-200">
-          <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
-          Settled
-        </span>
-        {settledOn ? (
-          <p className="text-[10px] font-semibold text-white/40">on {settledOn}</p>
-        ) : null}
-      </div>
-    );
-  }
 
   return (
-    <span className="inline-flex rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-amber-200">
-      Pending
-    </span>
+    <div className="flex flex-col gap-2">
+      {status === "Settled" ? (
+        <div className="space-y-1">
+          <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/35 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-emerald-200">
+            <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.4} />
+            Settled
+          </span>
+          {formatSettledOn(row.settled_at || row.created_at) ? (
+            <p className="text-[10px] font-semibold text-white/40">
+              on {formatSettledOn(row.settled_at || row.created_at)}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <span className="inline-flex w-fit rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-black uppercase tracking-wide text-amber-200">
+          Pending
+        </span>
+      )}
+
+      <div className="flex flex-wrap items-center gap-1.5">
+        {isPending ? (
+          <button
+            type="button"
+            title="Mark payment as settled"
+            onClick={onSettle}
+            disabled={actionBusy || rowDeleting}
+            className="inline-flex h-8 items-center gap-1 rounded-lg border border-emerald-400/40 bg-emerald-500/20 px-2.5 text-[10px] font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-50"
+          >
+            {rowSettling ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+            )}
+            Settle
+          </button>
+        ) : null}
+        <button
+          type="button"
+          title="Edit record"
+          onClick={onEdit}
+          disabled={actionBusy || rowDeleting}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-sky-400/30 bg-sky-500/15 text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
+        >
+          <Pencil className="h-3.5 w-3.5" strokeWidth={2.2} />
+        </button>
+        <button
+          type="button"
+          title="Delete record"
+          onClick={onDelete}
+          disabled={actionBusy || rowDeleting}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
+        >
+          {rowDeleting ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2.2} />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -100,22 +145,25 @@ export function BuyingSellingStockModal({
   const [editingId, setEditingId] = useState(null);
 
   const normalizedRecords = useMemo(
-    () => (records ?? []).map(normalizeBssRow),
+    () => normalizeBssRecords(records),
     [records]
   );
 
   useEffect(() => {
     if (!open) return;
-    if (focusRecordId) {
-      const row = normalizedRecords.find((r) => r.id === focusRecordId);
-      if (row) {
-        setEditingId(row.id);
-        setForm(buildBssFormFromRecord(row));
-      }
-      return;
+    if (!focusRecordId) {
+      setForm({ ...BSS_INITIAL_FORM });
+      setEditingId(null);
     }
-    setForm({ ...BSS_INITIAL_FORM });
-    setEditingId(null);
+  }, [open, focusRecordId]);
+
+  useEffect(() => {
+    if (!open || !focusRecordId) return;
+    const row = normalizedRecords.find((r) => r.id === focusRecordId);
+    if (row) {
+      setEditingId(row.id);
+      setForm(buildBssFormFromRecord(row));
+    }
   }, [open, focusRecordId, normalizedRecords]);
 
   const metrics = useMemo(() => computeBssMetrics(form), [form]);
@@ -587,17 +635,17 @@ export function BuyingSellingStockModal({
                 </h4>
                 <div className="overflow-hidden rounded-2xl border border-white/10">
                   <div className="max-h-[280px] overflow-auto">
-                    <table className="w-full min-w-[1020px] border-collapse text-left">
+                    <table className="w-full min-w-[1080px] border-collapse text-left">
                       <thead className="sticky top-0 bg-white/10">
                         <tr>
                           {[
                             "Date",
-                            "Vehicle",
-                            "Buyer",
-                            "Buy / Sell (kg)",
-                            "Net Profit",
-                            "Payment",
-                            "Actions",
+                            "Vehicle No",
+                            "Commodity",
+                            "Buying Wt (Kg)",
+                            "Selling Wt (Kg)",
+                            "Net Profit (Rs.)",
+                            "Status",
                           ].map((h) => (
                             <th
                               key={h}
@@ -619,14 +667,16 @@ export function BuyingSellingStockModal({
                             </td>
                           </tr>
                         ) : (
-                          normalizedRecords.map((row) => {
+                          normalizedRecords.map((row, index) => {
                             const rowDeleting = deletingId === row.id;
                             const rowSettling = paymentSettlingId === row.id;
                             const rowEditing = editingId === row.id;
                             const isPending = getBssPaymentStatus(row) === "Pending";
+                            const netProfit = getBssNetProfit(row);
+
                             return (
                               <tr
-                                key={row.id}
+                                key={row.id ?? `bss-row-${index}`}
                                 className={`border-t border-white/10 ${rowEditing ? "bg-emerald-500/10" : ""}`}
                               >
                                 <td className="px-4 py-3 text-sm font-semibold text-white/90">
@@ -636,59 +686,32 @@ export function BuyingSellingStockModal({
                                   {getBssVehicleNo(row)}
                                 </td>
                                 <td className="px-4 py-3 text-sm font-semibold text-white/90">
-                                  {row.buyer_name || "—"}
+                                  {getBssCommodityLabel(row)}
                                 </td>
-                                <td className="px-4 py-3 font-mono text-sm font-bold text-white">
-                                  {moneyPlain(getBssBuyingWeight(row))} /{" "}
-                                  {moneyPlain(getBssSellingWeight(row))} kg
+                                <td className="px-4 py-3 font-mono text-sm font-bold text-sky-100">
+                                  {formatBssWeightKg(getBssBuyingWeight(row))}
                                 </td>
-                                <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-200">
-                                  {moneyFullLkr(getBssNetProfit(row))}
+                                <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-100">
+                                  {formatBssWeightKg(getBssSellingWeight(row))}
+                                </td>
+                                <td
+                                  className={`px-4 py-3 font-mono text-sm font-bold ${
+                                    netProfit >= 0 ? "text-emerald-200" : "text-rose-200"
+                                  }`}
+                                >
+                                  {moneyFullLkr(netProfit)}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <PaymentStatusCell row={row} />
-                                </td>
-                                <td className="px-4 py-3">
-                                  <div className="flex items-center gap-2">
-                                    {isPending ? (
-                                      <button
-                                        type="button"
-                                        title="Mark payment as settled"
-                                        onClick={() => handleQuickSettle(row)}
-                                        disabled={actionBusy || rowDeleting}
-                                        className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-emerald-400/40 bg-emerald-500/20 px-3 text-xs font-black uppercase tracking-wide text-emerald-100 transition hover:bg-emerald-500/30 disabled:opacity-50"
-                                      >
-                                        {rowSettling ? (
-                                          <Loader2 className="h-4 w-4 animate-spin" />
-                                        ) : (
-                                          <CheckCircle2 className="h-4 w-4" strokeWidth={2.2} />
-                                        )}
-                                        Settle
-                                      </button>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      title="Edit"
-                                      onClick={() => handleEdit(row)}
-                                      disabled={actionBusy || rowDeleting}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-sky-400/30 bg-sky-500/15 text-sky-200 transition hover:bg-sky-500/25 disabled:opacity-50"
-                                    >
-                                      <Pencil className="h-4 w-4" strokeWidth={2.2} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      title="Delete"
-                                      onClick={() => handleDelete(row)}
-                                      disabled={actionBusy || rowDeleting}
-                                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-rose-400/30 bg-rose-500/15 text-rose-200 transition hover:bg-rose-500/25 disabled:opacity-50"
-                                    >
-                                      {rowDeleting ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        <Trash2 className="h-4 w-4" strokeWidth={2.2} />
-                                      )}
-                                    </button>
-                                  </div>
+                                  <PaymentStatusCell
+                                    row={row}
+                                    isPending={isPending}
+                                    rowSettling={rowSettling}
+                                    actionBusy={actionBusy}
+                                    rowDeleting={rowDeleting}
+                                    onSettle={() => handleQuickSettle(row)}
+                                    onEdit={() => handleEdit(row)}
+                                    onDelete={() => handleDelete(row)}
+                                  />
                                 </td>
                               </tr>
                             );
