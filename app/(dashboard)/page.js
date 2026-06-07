@@ -40,10 +40,19 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { BuyingSellingStockModal } from "@/components/dashboard/BuyingSellingStockModal";
 import {
-  BuyingSellingStockModal,
   ADD_NEW_VARIETY,
-} from "@/components/dashboard/BuyingSellingStockModal";
+  buildBssPayload,
+  getBssNetProfit,
+  getBssPaymentStatus,
+  getBssTotalKg,
+  getBssTotalSellingAmount,
+  getBssVehicleNo,
+  normalizeBssRow,
+  resolveBssVariety,
+  sumBssOutstandingReceivables,
+} from "@/lib/buying-selling-stock";
 import { DashboardAuthBar } from "@/components/dashboard/DashboardAuthBar";
 
 const DB_INWARD = "බඩු ගේන්න";
@@ -952,27 +961,37 @@ function buildBssSettlementNotifications(records) {
   const notifications = [];
 
   for (const row of active) {
-    const advance = toNum(row.advance_cash_paid);
-    const totalCost = toNum(row.total_cost);
-    const difference = Math.abs(advance - totalCost);
-    const buyerName = String(row.buyer_name ?? "").trim() || "Unknown Buyer";
-    const lorryNumber = String(row.lorry_number ?? "").trim() || "N/A";
+    const normalized = normalizeBssRow(row);
+    const vehicleNo = getBssVehicleNo(normalized);
 
-    if (advance > totalCost + SETTLE_EPSILON) {
+    if (getBssPaymentStatus(normalized) === "Pending") {
       notifications.push({
         id: row.id,
         type: "receivable",
-        difference,
-        buyerName,
-        lorryNumber,
+        difference: getBssTotalSellingAmount(normalized),
+        buyerName: String(normalized.buyer_name ?? "").trim() || "Unknown Buyer",
+        lorryNumber: vehicleNo,
       });
-    } else if (advance < totalCost - SETTLE_EPSILON) {
+    }
+
+    const supplierBalance = normalized.supplier_balance;
+    const supplierName = String(normalized.supplier_name ?? "").trim() || "Supplier";
+    if (supplierBalance < -SETTLE_EPSILON) {
       notifications.push({
-        id: row.id,
+        id: `${row.id}-supplier-overpaid`,
         type: "payable",
-        difference,
-        buyerName,
-        lorryNumber,
+        difference: Math.abs(supplierBalance),
+        buyerName: supplierName,
+        lorryNumber: vehicleNo,
+        supplierRecovery: true,
+      });
+    } else if (supplierBalance > SETTLE_EPSILON) {
+      notifications.push({
+        id: `${row.id}-supplier-balance`,
+        type: "payable",
+        difference: supplierBalance,
+        buyerName: supplierName,
+        lorryNumber: vehicleNo,
       });
     }
   }
@@ -986,8 +1005,12 @@ function buildBssSettlementNotifications(records) {
 function SettlementNotificationRow({ notification, index, onViewSettle }) {
   const isReceivable = notification.type === "receivable";
   const message = isReceivable
-    ? `🟢 Rs. ${moneyPlain(notification.difference)} due from Buyer ${notification.buyerName} (Lorry: ${notification.lorryNumber}) - Overpaid Advance`
-    : `🔴 Rs. ${moneyPlain(notification.difference)} outstanding payable to Buyer ${notification.buyerName} (Lorry: ${notification.lorryNumber}) - Credit Purchase`;
+    ? `Rs. ${moneyPlain(notification.difference)} outstanding from buyer ${notification.buyerName} (Vehicle: ${notification.lorryNumber}) — payment pending`
+    : notification.supplierRecovery
+      ? `Rs. ${moneyPlain(notification.difference)} recover from supplier ${notification.buyerName} (Vehicle: ${notification.lorryNumber}) — supplier overpaid`
+      : `Rs. ${moneyPlain(notification.difference)} outstanding payable to supplier ${notification.buyerName} (Vehicle: ${notification.lorryNumber})`;
+
+  const settleId = String(notification.id).split("-")[0];
 
   return (
     <motion.li
@@ -1005,10 +1028,10 @@ function SettlementNotificationRow({ notification, index, onViewSettle }) {
       </p>
       <button
         type="button"
-        onClick={() => onViewSettle(notification.id)}
+        onClick={() => onViewSettle(settleId)}
         className="inline-flex shrink-0 items-center justify-center rounded-xl border border-white/15 bg-white/10 px-3.5 py-2 text-xs font-black uppercase tracking-wide text-white transition hover:border-emerald-400/40 hover:bg-emerald-500/15 hover:text-emerald-100"
       >
-        View/Settle
+        View / Settle
       </button>
     </motion.li>
   );
@@ -1042,7 +1065,7 @@ function SettlementNotificationCenter({ notifications, onViewSettle }) {
 
         {!hasItems ? (
           <p className="text-sm font-semibold text-emerald-300/90">
-            ✅ All buying &amp; selling settlements are up to date.
+            All buying &amp; selling payments and supplier balances are up to date.
           </p>
         ) : (
           <ul className="space-y-2.5">
@@ -1444,11 +1467,12 @@ export default function DashboardHomePage() {
     fuelSpend: 0,
     inventoryValue: 0,
     buyingSellingKg: 0,
+    bssOutstandingReceivables: 0,
   });
   const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
   const [buyingSellingFocusId, setBuyingSellingFocusId] = useState(null);
   const [buyingSellingSubmitting, setBuyingSellingSubmitting] = useState(false);
-  const [buyingSellingSettling, setBuyingSellingSettling] = useState(false);
+  const [buyingSellingPaymentSettlingId, setBuyingSellingPaymentSettlingId] = useState(null);
   const [buyingSellingDeletingId, setBuyingSellingDeletingId] = useState(null);
   const [buyingSellingRecords, setBuyingSellingRecords] = useState([]);
   const [customPaddyTypes, setCustomPaddyTypes] = useState([]);
@@ -1624,7 +1648,9 @@ export default function DashboardHomePage() {
     }
 
     const stockExpenditure = paddyValue + inventoryValue;
-    const buyingSellingRows = buyingSellingRes.error ? [] : buyingSellingRes.data ?? [];
+    const buyingSellingRows = (buyingSellingRes.error ? [] : buyingSellingRes.data ?? []).map(
+      normalizeBssRow
+    );
     const paddyTypeNames = (customPaddyTypesRes.error ? [] : customPaddyTypesRes.data ?? []).map(
       (r) => String(r.name ?? "").trim()
     ).filter(Boolean);
@@ -1633,17 +1659,22 @@ export default function DashboardHomePage() {
 
     const buyingSellingKg = buyingSellingRows
       .filter((r) => r.is_active !== false)
-      .reduce((sum, r) => sum + toNum(r.buying_weight_kg), 0);
+      .reduce((sum, r) => sum + getBssTotalKg(r), 0);
 
-    const bssGrossProfit = buyingSellingRows.reduce((sum, r) => sum + toNum(r.gross_profit), 0);
+    const bssOutstandingReceivables = sumBssOutstandingReceivables(buyingSellingRows);
+
+    const bssGrossProfit = buyingSellingRows.reduce(
+      (sum, r) => sum + getBssNetProfit(r),
+      0
+    );
     const bssGrossProfitRows = buyingSellingRows
-      .filter((r) => toNum(r.gross_profit) !== 0)
+      .filter((r) => getBssNetProfit(r) !== 0)
       .map((r) => ({
         id: `bss-gp-${r.id}`,
         date: r.created_at,
         productBuyer: `${String(r.commodity_type ?? "Stock")} / ${String(r.buyer_name ?? "Buyer")}`,
-        quantity: toNum(r.buying_weight_kg),
-        revenue: toNum(r.gross_profit),
+        quantity: getBssTotalKg(r),
+        revenue: getBssNetProfit(r),
       }));
 
     const bssExpenseRows = buyingSellingRows
@@ -1651,7 +1682,7 @@ export default function DashboardHomePage() {
       .map((r) => ({
         id: `bss-exp-${r.id}`,
         date: r.created_at,
-        categoryDetail: `Buying & Selling Extra - ${String(r.lorry_number || "N/A")} (${String(r.buyer_name || "Buyer")})`,
+        categoryDetail: `Buying & Selling Extra - ${getBssVehicleNo(r)} (${String(r.buyer_name || "Buyer")})`,
         sourceModule: "Buying & Selling Stock",
         amount: toNum(r.extra_expenses),
       }));
@@ -1987,41 +2018,8 @@ export default function DashboardHomePage() {
       fuelSpend,
       inventoryValue,
       buyingSellingKg,
+      bssOutstandingReceivables,
     });
-  }, []);
-
-  const buildBuyingSellingPayload = useCallback((form, metrics) => {
-    let paddyVariety = null;
-    if (form.commodity_type === "Paddy") {
-      if (form.paddy_variety_select === ADD_NEW_VARIETY) {
-        const newName = String(form.new_variety_name ?? "").trim();
-        if (!newName) throw new Error("Please enter a new paddy variety name.");
-        paddyVariety = newName;
-      } else {
-        paddyVariety =
-          String(form.paddy_variety_select || form.paddy_variety || "").trim() || null;
-      }
-    }
-
-    return {
-      lorry_number: String(form.lorry_number ?? "").trim(),
-      driver_name: String(form.driver_name ?? "").trim(),
-      commodity_type: form.commodity_type,
-      paddy_variety: paddyVariety,
-      buyer_name: String(form.buyer_name ?? "").trim(),
-      buying_weight_kg: toNum(form.buying_weight_kg),
-      buying_rate_per_kg: toNum(form.buying_rate_per_kg),
-      selling_rate_per_kg: toNum(form.selling_rate_per_kg),
-      advance_cash_paid: toNum(form.advance_cash_paid),
-      extra_expenses: toNum(form.extra_expenses),
-      total_cost: metrics.totalCost,
-      total_revenue: metrics.totalRevenue,
-      gross_profit: metrics.grossProfit,
-      net_profit: metrics.netProfit,
-      advance_settlement_status: metrics.advanceSettlementStatus,
-      advance_difference: metrics.advanceDifference,
-      is_active: true,
-    };
   }, []);
 
   const handleBuyingSellingSubmit = useCallback(
@@ -2029,12 +2027,13 @@ export default function DashboardHomePage() {
       setBuyingSellingSubmitting(true);
       setError("");
       try {
-        const payload = buildBuyingSellingPayload(form, metrics);
+        const varietyValue = resolveBssVariety(form);
+        const payload = buildBssPayload(form, metrics, varietyValue);
 
-        if (form.commodity_type === "Paddy" && form.paddy_variety_select === ADD_NEW_VARIETY) {
+        if (form.commodity_type === "Paddy" && form.variety_select === ADD_NEW_VARIETY) {
           const { error: typeErr } = await supabase
             .from("custom_paddy_types")
-            .insert({ name: payload.paddy_variety });
+            .insert({ name: varietyValue });
           if (typeErr && !String(typeErr.message).includes("duplicate")) throw typeErr;
         }
 
@@ -2058,7 +2057,7 @@ export default function DashboardHomePage() {
         setBuyingSellingSubmitting(false);
       }
     },
-    [buildBuyingSellingPayload, refresh]
+    [refresh]
   );
 
   const handleBuyingSellingDelete = useCallback(
@@ -2088,36 +2087,50 @@ export default function DashboardHomePage() {
     setBuyingSellingFocusId(null);
   }, []);
 
-  const handleBuyingSellingSettle = useCallback(
-    async (recordId, form, metrics) => {
-      setBuyingSellingSettling(true);
+  const handleBuyingSellingPaymentSettle = useCallback(
+    async (recordId) => {
+      setBuyingSellingPaymentSettlingId(recordId);
       setError("");
       try {
-        const payload = {
-          ...buildBuyingSellingPayload(form, metrics),
-          advance_cash_paid: metrics.totalCost,
-          advance_difference: 0,
-          advance_settlement_status: "settled",
-          settled_at: new Date().toISOString(),
-        };
-
+        const settledAt = new Date().toISOString();
         const { error: updateErr } = await supabase
           .from("buying_selling_stock")
-          .update(payload)
+          .update({
+            payment_status: "Settled",
+            advance_settlement_status: "settled",
+            settled_at: settledAt,
+          })
           .eq("id", recordId);
         if (updateErr) throw updateErr;
 
+        setBuyingSellingRecords((prev) => {
+          const next = prev.map((row) =>
+            row.id === recordId
+              ? {
+                  ...row,
+                  payment_status: "Settled",
+                  advance_settlement_status: "settled",
+                  settled_at: settledAt,
+                }
+              : row
+          );
+          setKpis((kpiPrev) => ({
+            ...kpiPrev,
+            bssOutstandingReceivables: sumBssOutstandingReceivables(next),
+          }));
+          return next;
+        });
+
         await refresh();
-        closeBuyingSellingModal();
         return true;
       } catch (err) {
         setError(dbError(err));
         return false;
       } finally {
-        setBuyingSellingSettling(false);
+        setBuyingSellingPaymentSettlingId(null);
       }
     },
-    [buildBuyingSellingPayload, refresh, closeBuyingSellingModal]
+    [refresh]
   );
 
   useEffect(() => {
@@ -2198,9 +2211,9 @@ export default function DashboardHomePage() {
           paddyTypes={customPaddyTypes}
           onSubmit={handleBuyingSellingSubmit}
           onDelete={handleBuyingSellingDelete}
-          onSettle={handleBuyingSellingSettle}
+          onPaymentSettle={handleBuyingSellingPaymentSettle}
           submitting={buyingSellingSubmitting}
-          settling={buyingSellingSettling}
+          paymentSettlingId={buyingSellingPaymentSettlingId}
           deletingId={buyingSellingDeletingId}
           focusRecordId={buyingSellingFocusId}
         />
@@ -2299,6 +2312,14 @@ export default function DashboardHomePage() {
                   sub="Active trade weight"
                   tone="emerald"
                   icon={Package}
+                  onClick={openBuyingSellingModal}
+                />
+                <KpiCard
+                  title="Total Outstanding Receivables"
+                  value={moneyFullLkr(kpis.bssOutstandingReceivables)}
+                  sub="Pending buyer payments from stock sales"
+                  tone="emerald"
+                  icon={HandCoins}
                   onClick={openBuyingSellingModal}
                 />
                 <KpiCard
