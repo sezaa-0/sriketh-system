@@ -21,6 +21,8 @@ create table if not exists buying_selling_stock (
   variety text,
   paddy_variety text,
   buyer_name text not null default '',
+  buying_weight numeric not null default 0,
+  selling_weight numeric not null default 0,
   total_kg numeric not null default 0,
   buying_weight_kg numeric not null default 0,
   buying_price_per_kg numeric not null default 0,

@@ -10,9 +10,10 @@ import {
   BSS_PAYMENT_STATUSES,
   buildBssFormFromRecord,
   computeBssMetrics,
+  getBssBuyingWeight,
   getBssNetProfit,
   getBssPaymentStatus,
-  getBssTotalKg,
+  getBssSellingWeight,
   getBssVehicleNo,
   normalizeBssRow,
 } from "@/lib/buying-selling-stock";
@@ -314,20 +315,6 @@ export function BuyingSellingStockModal({
                       />
                     </label>
                   ) : null}
-                  <label className="mt-4 block space-y-1.5">
-                    <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
-                      Total Weight (KG)
-                    </span>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      className={INPUT}
-                      value={form.total_kg}
-                      onChange={(ev) => setField("total_kg", ev.target.value)}
-                      required
-                    />
-                  </label>
                 </div>
 
                 {/* Buying section */}
@@ -344,6 +331,20 @@ export function BuyingSellingStockModal({
                         className={INPUT}
                         value={form.supplier_name}
                         onChange={(ev) => setField("supplier_name", ev.target.value)}
+                        required
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
+                        Buying Weight (Total Kg)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className={INPUT}
+                        value={form.buying_weight}
+                        onChange={(ev) => setField("buying_weight", ev.target.value)}
                         required
                       />
                     </label>
@@ -451,6 +452,20 @@ export function BuyingSellingStockModal({
                         className={INPUT}
                         value={form.buyer_name}
                         onChange={(ev) => setField("buyer_name", ev.target.value)}
+                        required
+                      />
+                    </label>
+                    <label className="block space-y-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-wide text-white/50">
+                        Selling Weight (Total Kg)
+                      </span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="any"
+                        className={INPUT}
+                        value={form.selling_weight}
+                        onChange={(ev) => setField("selling_weight", ev.target.value)}
                         required
                       />
                     </label>
@@ -579,7 +594,7 @@ export function BuyingSellingStockModal({
                             "Date",
                             "Vehicle",
                             "Buyer",
-                            "KG",
+                            "Buy / Sell (kg)",
                             "Net Profit",
                             "Payment",
                             "Actions",
@@ -624,7 +639,8 @@ export function BuyingSellingStockModal({
                                   {row.buyer_name || "—"}
                                 </td>
                                 <td className="px-4 py-3 font-mono text-sm font-bold text-white">
-                                  {moneyPlain(getBssTotalKg(row))} kg
+                                  {moneyPlain(getBssBuyingWeight(row))} /{" "}
+                                  {moneyPlain(getBssSellingWeight(row))} kg
                                 </td>
                                 <td className="px-4 py-3 font-mono text-sm font-bold text-emerald-200">
                                   {moneyFullLkr(getBssNetProfit(row))}

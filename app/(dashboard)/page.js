@@ -45,13 +45,15 @@ import {
   ADD_NEW_VARIETY,
   buildBssPayload,
   getBssAdditionalExpenses,
+  getBssBuyingWeight,
   getBssNetProfit,
   getBssPaymentStatus,
-  getBssTotalKg,
+  getBssSellingWeight,
   getBssTotalSellingAmount,
   getBssVehicleNo,
   normalizeBssRow,
   resolveBssVariety,
+  sumBssActiveBuyingWeight,
   sumBssOutstandingReceivables,
 } from "@/lib/buying-selling-stock";
 import { DashboardAuthBar } from "@/components/dashboard/DashboardAuthBar";
@@ -1658,9 +1660,9 @@ export default function DashboardHomePage() {
     setCustomPaddyTypes(paddyTypeNames);
     setBuyingSellingRecords(buyingSellingRows);
 
-    const buyingSellingKg = buyingSellingRows
-      .filter((r) => r.is_active !== false)
-      .reduce((sum, r) => sum + getBssTotalKg(r), 0);
+    const buyingSellingKg = sumBssActiveBuyingWeight(
+      buyingSellingRows.filter((r) => r.is_active !== false)
+    );
 
     const bssOutstandingReceivables = sumBssOutstandingReceivables(buyingSellingRows);
 
@@ -1674,7 +1676,7 @@ export default function DashboardHomePage() {
         id: `bss-gp-${r.id}`,
         date: r.created_at,
         productBuyer: `${String(r.commodity_type ?? "Stock")} / ${String(r.buyer_name ?? "Buyer")}`,
-        quantity: getBssTotalKg(r),
+        quantity: getBssBuyingWeight(r),
         revenue: getBssNetProfit(r),
       }));
 
