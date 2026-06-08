@@ -1,11 +1,9 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   AlertCircle,
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   CreditCard,
@@ -286,27 +284,18 @@ export default function FuelManagementPage() {
     row.status === FUEL_STATUS.PENDING || row.status === FUEL_STATUS.PARTIAL;
 
   return (
-    <div className="mx-auto max-w-6xl pb-12">
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Link
-            href="/"
-            className="mb-4 inline-flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-neutral-400 transition hover:text-neutral-950"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Back to Dashboard
-          </Link>
-          <h1 className="flex items-center gap-2.5 text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
-            <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white">
-              <Fuel className="h-5 w-5" strokeWidth={2.2} />
-            </span>
-            Fuel Management
-          </h1>
-          <p className="mt-2 max-w-xl text-sm font-medium text-neutral-500">
-            Record vehicle fuel purchases, track credit balances, and manage installment payments by
-            station.
-          </p>
-        </div>
+    <>
+      <div className="mb-8">
+        <h1 className="flex items-center gap-2.5 text-2xl font-black tracking-tight text-neutral-950 sm:text-3xl">
+          <span className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-950 text-white">
+            <Fuel className="h-5 w-5" strokeWidth={2.2} />
+          </span>
+          Fuel Management
+        </h1>
+        <p className="mt-2 max-w-xl text-sm font-medium text-neutral-500">
+          Record vehicle fuel purchases, track credit balances, and manage installment payments by
+          station.
+        </p>
       </div>
 
       {error ? (
@@ -661,6 +650,6 @@ export default function FuelManagementPage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-    </div>
+    </>
   );
 }
