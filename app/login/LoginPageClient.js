@@ -5,10 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, Lock, User } from "lucide-react";
 import { BrandLogo } from "@/components/ui/BrandLogo";
 import { ADMIN_USERNAME } from "@/lib/auth/constants";
-import {
-  getExpectedLoginUsername,
-  persistUsernameAfterLogin,
-} from "@/lib/auth/custom-username";
+import { fetchCustomUsername } from "@/lib/auth/app-settings";
 
 const INPUT =
   "w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3.5 pl-11 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/10";
@@ -30,7 +27,7 @@ export default function LoginPageClient() {
 
     try {
       if (trimmedUsername !== ADMIN_USERNAME) {
-        const expectedUsername = getExpectedLoginUsername();
+        const expectedUsername = await fetchCustomUsername();
         if (trimmedUsername !== expectedUsername) {
           setError("Invalid Username or Password");
           return;
@@ -51,10 +48,6 @@ export default function LoginPageClient() {
       if (!res.ok) {
         setError(data.error || "Invalid Username or Password");
         return;
-      }
-
-      if (trimmedUsername !== ADMIN_USERNAME) {
-        persistUsernameAfterLogin(trimmedUsername);
       }
 
       const next = searchParams.get("next") || "/";

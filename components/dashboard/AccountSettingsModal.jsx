@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, Settings, X } from "lucide-react";
 import { AUTH_ROLES } from "@/lib/auth/constants";
-import { getCustomUsername, setCustomUsername } from "@/lib/auth/custom-username";
+import { fetchCustomUsername } from "@/lib/auth/app-settings";
+import { supabase } from "@/lib/supabase";
 
 const INPUT =
   "w-full rounded-2xl border border-neutral-200 bg-neutral-50 px-4 py-3 text-sm font-semibold text-neutral-900 outline-none transition placeholder:text-neutral-400 focus:border-neutral-950 focus:bg-white focus:ring-2 focus:ring-neutral-950/10";
@@ -28,6 +29,7 @@ export function AccountSettingsModal({
   variant = "dark",
 }) {
   const [storedUsername, setStoredUsername] = useState("");
+  const [loadingUsername, setLoadingUsername] = useState(false);
   const [nextUsername, setNextUsername] = useState("");
   const [nextPassword, setNextPassword] = useState("");
   const [error, setError] = useState("");
@@ -37,22 +39,42 @@ export function AccountSettingsModal({
   const isAdmin = role === AUTH_ROLES.ADMIN;
   const isDark = variant === "dark";
 
-  const readCurrentUsername = () =>
-    isAdmin ? username || "admin" : getCustomUsername();
-
   useEffect(() => {
-    if (open) {
-      setStoredUsername(readCurrentUsername());
-      setNextUsername("");
-      setNextPassword("");
-      setError("");
-      setSuccess("");
+    if (!open) return;
+
+    setNextUsername("");
+    setNextPassword("");
+    setError("");
+    setSuccess("");
+
+    if (isAdmin) {
+      setStoredUsername(username || "admin");
+      return;
     }
+
+    let cancelled = false;
+    setLoadingUsername(true);
+
+    (async () => {
+      try {
+        const dbUsername = await fetchCustomUsername();
+        if (!cancelled) setStoredUsername(dbUsername);
+      } catch {
+        if (!cancelled) setStoredUsername(username || "User");
+      } finally {
+        if (!cancelled) setLoadingUsername(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [open, username, isAdmin]);
 
   const handleSubmit = async (ev) => {
     ev.preventDefault();
     setError("");
+    setSuccess("");
 
     if (isAdmin) {
       setError("Administrator sessions use fixed credentials and cannot be updated here.");
@@ -67,8 +89,21 @@ export function AccountSettingsModal({
 
     setSubmitting(true);
     try {
+      let updatedUsername = storedUsername;
+
       if (trimmedUsername) {
-        setCustomUsername(trimmedUsername);
+        const { error: settingsErr } = await supabase
+          .from("app_settings")
+          .update({ custom_username: trimmedUsername })
+          .eq("id", 1);
+
+        if (settingsErr) {
+          setError("Could not update username. Please try again.");
+          return;
+        }
+
+        updatedUsername = trimmedUsername;
+        setStoredUsername(trimmedUsername);
       }
 
       const res = await fetch("/api/auth/update-profile", {
@@ -85,8 +120,11 @@ export function AccountSettingsModal({
         return;
       }
 
-      const updatedName = readCurrentUsername();
-      setStoredUsername(updatedName);
+      if (data.username) {
+        updatedUsername = data.username;
+        setStoredUsername(updatedUsername);
+      }
+
       const parts = [];
       if (data.usernameUpdated) parts.push("username");
       if (data.passwordUpdated) parts.push("password");
@@ -95,7 +133,7 @@ export function AccountSettingsModal({
           ? `Your ${parts.join(" and ")} ${parts.length > 1 ? "were" : "was"} updated successfully.`
           : "Account settings updated successfully.";
 
-      onUpdated(updatedName, message);
+      onUpdated(updatedUsername, message);
       setNextUsername("");
       setNextPassword("");
       setSuccess(message);
@@ -114,6 +152,9 @@ export function AccountSettingsModal({
   const closeBtn = isDark
     ? "border-white/15 bg-white/10 text-white/80 hover:bg-white/20"
     : "border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100";
+
+  const currentUsernameLabel =
+    loadingUsername && !storedUsername ? "Loading..." : storedUsername || username || "User";
 
   return (
     <AnimatePresence>
@@ -144,11 +185,11 @@ export function AccountSettingsModal({
                 </h2>
                 <p className={`mt-1 text-xs font-semibold ${sub}`}>
                   Signed in as{" "}
-                  <span className="font-black">{storedUsername || username || "User"}</span>
+                  <span className="font-black">{currentUsernameLabel}</span>
                 </p>
                 {!isAdmin ? (
                   <p className={`mt-1 text-[10px] font-medium ${sub}`}>
-                    Login username is stored securely on this device.
+                    Login username is stored securely in the system database.
                   </p>
                 ) : null}
               </div>
@@ -182,8 +223,8 @@ export function AccountSettingsModal({
                     className={INPUT}
                     value={nextUsername}
                     onChange={(ev) => setNextUsername(ev.target.value)}
-                    placeholder={`Current: ${storedUsername}`}
-                    key={`username-placeholder-${storedUsername}`}
+                    placeholder={`Current: ${currentUsernameLabel}`}
+                    disabled={loadingUsername}
                   />
                 </label>
                 <label className="block">
@@ -225,7 +266,7 @@ export function AccountSettingsModal({
 
                 <button
                   type="submit"
-                  disabled={submitting}
+                  disabled={submitting || loadingUsername}
                   className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-black transition disabled:opacity-60 ${
                     isDark
                       ? "border border-emerald-400/40 bg-emerald-500/20 text-emerald-100 hover:bg-emerald-500/30"

@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { CheckCircle2, LogOut, Settings, User } from "lucide-react";
 import { AccountSettingsModal } from "@/components/dashboard/AccountSettingsModal";
 import { AUTH_ROLES } from "@/lib/auth/constants";
-import { getCustomUsername } from "@/lib/auth/custom-username";
+import { fetchCustomUsername } from "@/lib/auth/app-settings";
 import { logoutAndRedirect, useAuthSession } from "@/lib/auth/use-auth-session";
 
 /**
@@ -22,10 +22,15 @@ export function DashboardAuthBar({ variant = "dark", className = "" }) {
   useEffect(() => {
     if (!session?.authenticated) return;
     if (session.role === AUTH_ROLES.USER) {
-      setDisplayUsername(getCustomUsername());
-    } else {
-      setDisplayUsername(session.username || "User");
+      let cancelled = false;
+      fetchCustomUsername().then((name) => {
+        if (!cancelled) setDisplayUsername(name);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
+    setDisplayUsername(session.username || "User");
   }, [session]);
 
   useEffect(() => {

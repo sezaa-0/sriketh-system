@@ -1,24 +1,32 @@
-# Authentication Setup — Dynamic Username (localStorage)
+# Authentication Setup — Database-Backed Username
 
-## Supabase user (password only)
+## Custom login username
 
-1. Open **Supabase Dashboard → Authentication → Users → Add user**
-2. Email: `user@system.com`
-3. Password: set the uncle's initial password (changeable later in **Account Settings**)
+The expected login username is stored in Supabase:
 
-No Supabase user metadata is required. The **login username** is stored on this device in `localStorage` under `custom_sys_username` (default: `uncle`).
+- **Table:** `app_settings`
+- **Row:** `id = 1`
+- **Column:** `custom_username` (default: `uncle`)
 
-## Sign in
+Run `supabase/migration-app-settings.sql` in the Supabase SQL editor before using Account Settings or dynamic login.
 
-| Account | Username | Password |
-|---------|----------|----------|
-| Dynamic user | Value in `custom_sys_username` (default `uncle`) | Supabase password for `user@system.com` |
-| Administrator backdoor | `admin` | `1234` |
+## Sign in flow
 
-## Change username
+1. Client fetches `custom_username` from `app_settings` (fallback: `uncle`).
+2. Entered username must match that value (or use the fixed `admin` backdoor).
+3. Password is validated via Supabase Auth for `user@system.com`.
 
-Dashboard → **Account Settings** → **Change Username** → saves to `localStorage` and updates the active session display immediately.
+## Account Settings
 
-## Sessions
+Dashboard → **Account Settings** → **Change Username** updates `app_settings.custom_username` where `id = 1`.
 
-Auth cookies are **session cookies** (no persistent expiry). Closing the browser ends the session and requires sign-in again.
+Password changes use `supabase.auth.updateUser({ password })` via `/api/auth/update-profile`.
+
+## Supabase auth user
+
+Create one auth user for the ERP operator:
+
+- **Email:** `user@system.com`
+- **Password:** set during initial setup
+
+See earlier migration notes for RLS and session cookie behaviour.

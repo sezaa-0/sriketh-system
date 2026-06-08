@@ -6,6 +6,7 @@ import {
   SYSTEM_AUTH_EMAIL,
 } from "@/lib/auth/constants";
 import { setAuthSessionCookies } from "@/lib/auth/cookies-server";
+import { fetchCustomUsernameFromSettings } from "@/lib/auth/app-settings";
 import { createAuthSupabaseClient } from "@/lib/auth/supabase-server";
 
 export async function POST(request) {
@@ -35,6 +36,15 @@ export async function POST(request) {
     }
 
     const supabase = createAuthSupabaseClient();
+
+    const expectedUsername = await fetchCustomUsernameFromSettings(supabase);
+    if (username !== expectedUsername) {
+      return NextResponse.json(
+        { error: "Invalid Username or Password" },
+        { status: 401 }
+      );
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({
       email: SYSTEM_AUTH_EMAIL,
       password,
