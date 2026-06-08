@@ -58,6 +58,10 @@ import {
   sumBssActiveBuyingWeight,
   sumBssOutstandingReceivables,
 } from "@/lib/buying-selling-stock";
+import {
+  groupFuelOutstandingByStation,
+  sumFuelOutstanding,
+} from "@/lib/fuel-management";
 import { DashboardAuthBar } from "@/components/dashboard/DashboardAuthBar";
 
 const DB_INWARD = "බඩු ගේන්න";
@@ -91,6 +95,7 @@ const MODULE_THEMES = {
   "/deposits": { primary: "#22d3ee", dark: "#0891b2", border: "border-cyan-400/30" },
   "/inventory": { primary: "#f97316", dark: "#c2410c", border: "border-orange-500/30" },
   "/diesel": { primary: "#60a5fa", dark: "#2563eb", border: "border-blue-400/30" },
+  "/fuel": { primary: "#0ea5e9", dark: "#0284c7", border: "border-sky-400/30" },
 };
 
 const KPI_GLOW = {
@@ -272,6 +277,15 @@ const MODULES = [
     gradient: "from-orange-500/15 via-orange-50/80 to-white",
     border: "border-orange-200/60",
     iconBg: "bg-orange-500 text-white shadow-lg shadow-orange-500/25",
+  },
+  {
+    href: "/fuel",
+    title: "Fuel Management",
+    sub: "Fuel & Credit",
+    icon: Fuel,
+    gradient: "from-sky-500/15 via-sky-50/80 to-white",
+    border: "border-sky-200/60",
+    iconBg: "bg-sky-600 text-white shadow-lg shadow-sky-600/25",
   },
   {
     href: "/diesel",
@@ -1122,6 +1136,10 @@ const HISTORY_MODAL_META = {
     title: "Active Capital - Detailed History Log",
     columns: ["Date", "Description", "Amount (Rs.)"],
   },
+  fuelOutstanding: {
+    title: "Total Fuel Outstanding — By Station",
+    columns: ["Fuel Station", "Outstanding (Rs.)"],
+  },
 };
 
 function HistoryModal({ activeKey, logs, onClose }) {
@@ -1473,6 +1491,7 @@ export default function DashboardHomePage() {
     inventoryValue: 0,
     buyingSellingKg: 0,
     bssOutstandingReceivables: 0,
+    fuelOutstanding: 0,
   });
   const [buyingSellingOpen, setBuyingSellingOpen] = useState(false);
   const [buyingSellingFocusId, setBuyingSellingFocusId] = useState(null);
@@ -1490,6 +1509,7 @@ export default function DashboardHomePage() {
     receivables: [],
     payables: [],
     activeCapital: [],
+    fuelOutstanding: [],
   });
   const [allExpenses, setAllExpenses] = useState([]);
   const [settlements, setSettlements] = useState([]);
@@ -1532,6 +1552,7 @@ export default function DashboardHomePage() {
       staffAdvancesRes,
       buyingSellingRes,
       customPaddyTypesRes,
+      fuelLogsRes,
     ] = await Promise.all([
       supabase.from("trips").select("*"),
       supabase
@@ -1549,6 +1570,7 @@ export default function DashboardHomePage() {
       supabase.from("staff_advances").select("id, staff_id, amount, description, created_at"),
       supabase.from("buying_selling_stock").select("*").order("created_at", { ascending: false }),
       supabase.from("custom_paddy_types").select("id, name").order("name"),
+      supabase.from("fuel_logs").select("*").order("created_at", { ascending: false }),
     ]);
 
     const [expensesTableRes, payrollTableRes, maintenanceTableRes, dieselTableRes] =
@@ -1734,6 +1756,10 @@ export default function DashboardHomePage() {
     const vehicles = vehiclesRes.error ? [] : (vehiclesRes.data ?? []);
     setVehicleAlerts(buildVehicleComplianceAlerts(vehicles));
     setSettlements(settlementRows);
+
+    const fuelLogRows = fuelLogsRes.error ? [] : fuelLogsRes.data ?? [];
+    const fuelOutstanding = sumFuelOutstanding(fuelLogRows);
+    const fuelOutstandingByStation = groupFuelOutstandingByStation(fuelLogRows);
 
     const staffNameById = new Map(
       ((staffRes.error ? [] : staffRes.data ?? [])).map((s) => [String(s.id), String(s.name ?? "").trim()])
@@ -2015,6 +2041,10 @@ export default function DashboardHomePage() {
         id: r.id,
         cells: [formatDateTime(r.date), r.description, moneyFullLkr(r.amount)],
       })),
+      fuelOutstanding: fuelOutstandingByStation.map((r) => ({
+        id: r.id,
+        cells: [r.station, moneyFullLkr(r.amount)],
+      })),
     });
 
     setKpis({
@@ -2031,6 +2061,7 @@ export default function DashboardHomePage() {
       inventoryValue,
       buyingSellingKg,
       bssOutstandingReceivables,
+      fuelOutstanding,
     });
   }, []);
 
@@ -2386,6 +2417,14 @@ export default function DashboardHomePage() {
                   tone="neutral"
                   icon={Landmark}
                   onClick={() => setActiveHistoryModal("activeCapital")}
+                />
+                <KpiCard
+                  title="Total Fuel Outstanding"
+                  value={moneyFullLkr(kpis.fuelOutstanding)}
+                  sub="Unpaid credit fuel balances by station"
+                  tone="rose"
+                  icon={Fuel}
+                  onClick={() => setActiveHistoryModal("fuelOutstanding")}
                 />
               </motion.div>
             </motion.section>
